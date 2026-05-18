@@ -29,7 +29,8 @@ export default function SchoolScreen({ route, navigation }) {
   const [selectedDriverReport, setSelectedDriverReport] = useState('الكل');
   const [showDriverForm, setShowDriverForm] = useState(false);
   const [showSpeedPicker, setShowSpeedPicker] = useState(false);
-  const speedOptions = [50, 60, 70, 80, 90, 100, 110, 120];
+  const [enableSpeedAlert, setEnableSpeedAlert] = useState(false);
+  const speedOptions = ['بدون تحديد', 50, 60, 70, 80, 90, 100, 110, 120];
 
   const [dynamicSchoolName, setDynamicSchoolName] = useState("");
 
@@ -207,7 +208,7 @@ export default function SchoolScreen({ route, navigation }) {
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>السرعة القصوى المسموحة (كم/س):</Text>
               <TouchableOpacity style={styles.speedPickerBtn} onPress={() => setShowSpeedPicker(true)}>
-                <Text style={styles.speedPickerText}>{formData.max_speed || 'اختر السرعة'}</Text>
+                <Text style={styles.speedPickerText}>{formData.max_speed ? (formData.max_speed === 'بدون تحديد' ? 'بدون تحديد' : `${formData.max_speed} كم/س`) : 'اختر السرعة'}</Text>
                 <Text style={styles.speedPickerArrow}>▼</Text>
               </TouchableOpacity>
             </View>
@@ -216,12 +217,12 @@ export default function SchoolScreen({ route, navigation }) {
             {showSpeedPicker && (
               <View style={styles.speedPickerModal}>
                 <Text style={styles.speedPickerTitle}>اختر السرعة القصوى:</Text>
-                <ScrollView style={styles.speedPickerList}>
-                  {speedOptions.map(speed => (
+                <ScrollView style={styles.speedPickerList} nestedScrollEnabled={true}>
+                  {speedOptions.map((speed, idx) => (
                     <TouchableOpacity 
-                      key={speed} 
+                      key={idx} 
                       style={[styles.speedOption, formData.max_speed === speed && styles.speedOptionActive]}
-                      onPress={() => { setFormData({ ...formData, max_speed: speed }); setShowSpeedPicker(false); }}
+                      onPress={() => { setFormData({ ...formData, max_speed: speed }); setShowSpeedPicker(false); if (speed === 'بدون تحديد') setEnableSpeedAlert(false); else setEnableSpeedAlert(true); }}
                     >
                       <Text style={[styles.speedOptionText, formData.max_speed === speed && styles.speedOptionTextActive]}>{speed} كم/س</Text>
                     </TouchableOpacity>
