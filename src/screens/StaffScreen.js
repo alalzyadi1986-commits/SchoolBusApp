@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, update, push, set } from "firebase/database";
 import { db } from '../firebaseConfig';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -29,13 +29,26 @@ export default function StaffScreen() {
     return () => unsubscribe();
   }, [schoolId, user]);
 
-  const toggleStatus = async (studentId, currentStatus) => {
+  const toggleStatus = async (student, currentStatus) => {
     if (user?.permissions && !user.permissions.markAttendance) {
       Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية تسجيل الحضور');
       return;
     }
     const newStatus = currentStatus === 'present' ? 'pending' : 'present';
-    await update(ref(db, `schools/${schoolId}/students/${studentId}`), { status: newStatus });
+    await update(ref(db, `schools/${schoolId}/students/${student.id}`), { status: newStatus });
+    
+    // إضافة سجل للتقرير
+    if (newStatus === 'present') {
+      const reportRef = ref(db, `schools/${schoolId}/reports`);
+      const newReport = push(reportRef);
+      await set(newReport, {
+        type: 'attendance',
+        timestamp: new Date().toISOString(),
+        message: `المرافقة ${user.name} قامت بتحضير الطالب ${student.name} في الباص.`,
+        studentId: student.id,
+        staffId: user.username
+      });
+    }
   };
 
   const callParent = async (parentUsername) => {
@@ -68,7 +81,7 @@ export default function StaffScreen() {
             <TouchableOpacity style={styles.callBtn} onPress={() => callParent(item.parent_username)}><Text style={styles.callBtnText}>📞 اتصل</Text></TouchableOpacity>
             <TouchableOpacity 
               style={[styles.statusToggle, { backgroundColor: item.status === 'present' ? '#10B981' : '#F1F5F9' }]}
-              onPress={() => toggleStatus(item.id, item.status)}
+              onPress={() => toggleStatus(item, item.status)}
             >
               <Text style={[styles.statusToggleText, { color: item.status === 'present' ? '#FFF' : '#64748B' }]}>
                 {item.status === 'present' ? 'تم الركوب ✓' : 'تحضير'}

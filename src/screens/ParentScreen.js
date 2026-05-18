@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, ActivityIn
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, update, push, set } from "firebase/database";
 import { db } from '../firebaseConfig';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -88,10 +88,23 @@ export default function ParentScreen() {
       [
         { text: 'إلغاء', style: 'cancel' },
         { text: 'تأكيد', onPress: async () => {
+          const newStatus = isAbsent ? 'pending' : 'absent_today';
           await update(ref(db, `schools/${schoolId}/students/${studentInfo.id}`), {
-            status: isAbsent ? 'pending' : 'absent_today',
+            status: newStatus,
             lastUpdate: new Date().toISOString()
           });
+          
+          // إضافة سجل للتقرير
+          const reportRef = ref(db, `schools/${schoolId}/reports`);
+          const newReport = push(reportRef);
+          await set(newReport, {
+            type: 'absence',
+            timestamp: new Date().toISOString(),
+            message: `ولي الأمر (${user.username}) أبلغ عن ${newStatus === 'absent_today' ? 'غياب' : 'إلغاء غياب'} الطالب ${studentInfo.name}.`,
+            studentId: studentInfo.id,
+            parentUsername: user.username
+          });
+
           Alert.alert('تم التحديث', isAbsent ? 'تم إلغاء بلاغ الغياب' : 'تم إبلاغ السائق والمرافقة بغياب الطالب');
         }}
       ]

@@ -25,6 +25,7 @@ export default function SchoolScreen() {
   const [parentsList, setParentsList] = useState([]);
   const [studentsList, setStudentsList] = useState([]);
   const [emergencies, setEmergencies] = useState([]);
+  const [reports, setReports] = useState([]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilterClass, setSelectedFilterClass] = useState('الكل');
@@ -81,6 +82,13 @@ export default function SchoolScreen() {
             const activeAlert = list.find(e => e.status === 'active');
             if (activeAlert) Alert.alert('⚠️ تنبيه طوارئ', `هناك بلاغ طوارئ نشط من ${activeAlert.senderName}`);
           } else setEmergencies([]);
+
+          if (data.reports) {
+            const list = Object.keys(data.reports)
+              .map(key => ({ id: key, ...data.reports[key] }))
+              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            setReports(list);
+          } else setReports([]);
         }
       });
       return () => unsubscribe();
@@ -156,10 +164,10 @@ export default function SchoolScreen() {
       </View>
 
       <View style={styles.tabBar}>
-        {['drivers', 'staff', 'parents', 'students', 'emergencies'].map((tab) => (
+        {['drivers', 'staff', 'parents', 'students', 'emergencies', 'reports'].map((tab) => (
           <TouchableOpacity key={tab} style={[styles.tabItem, activeTab === tab && styles.activeTabItem]} onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-              {tab === 'drivers' ? 'السائقين' : tab === 'staff' ? 'المرافقين' : tab === 'parents' ? 'الأهل' : tab === 'students' ? 'الطلاب' : 'الطوارئ'}
+              {tab === 'drivers' ? 'سائقين' : tab === 'staff' ? 'مرافقين' : tab === 'parents' ? 'أهل' : tab === 'students' ? 'طلاب' : tab === 'emergencies' ? 'طوارئ' : 'تقارير'}
             </Text>
             {tab === 'emergencies' && emergencies.filter(e => e.status === 'active').length > 0 && <View style={styles.badge} />}
           </TouchableOpacity>
@@ -187,6 +195,21 @@ export default function SchoolScreen() {
               </View>
             )}
             ListEmptyComponent={<Text style={styles.emptyText}>لا توجد بلاغات طوارئ حالياً</Text>}
+          />
+        ) : activeTab === 'reports' ? (
+          <FlatList
+            data={reports}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.reportCard}>
+                <View style={styles.reportHeader}>
+                  <Text style={styles.reportDate}>{new Date(item.timestamp).toLocaleDateString('ar-EG')}</Text>
+                  <Text style={styles.reportType}>{item.type === 'attendance' ? 'سجل حضور' : 'بلاغ غياب'}</Text>
+                </View>
+                <Text style={styles.reportContent}>{item.message}</Text>
+              </View>
+            )}
+            ListEmptyComponent={<Text style={styles.emptyText}>لا توجد تقارير حالياً</Text>}
           />
         ) : (
           <>
@@ -328,6 +351,11 @@ const styles = StyleSheet.create({
   mapBtn: { backgroundColor: '#3B82F6', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
   mapBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   resolvedText: { fontSize: 11, color: '#10B981', fontWeight: 'bold' },
+  reportCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, elevation: 1, borderLeftWidth: 4, borderLeftColor: '#3B82F6' },
+  reportHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  reportDate: { fontSize: 12, color: '#64748B' },
+  reportType: { fontSize: 12, fontWeight: 'bold', color: '#3B82F6' },
+  reportContent: { fontSize: 14, color: '#1E293B', textAlign: 'right' },
   emptyText: { textAlign: 'center', color: '#64748B', marginTop: 50 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 20, maxHeight: '90%' },
