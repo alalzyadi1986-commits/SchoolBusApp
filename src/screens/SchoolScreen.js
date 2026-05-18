@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Alert, ScrollView, ActivityIndicator, Modal } from 'react-native';
 import { db } from '../firebaseConfig';
 import { ref, set, push, onValue, remove, update } from 'firebase/database';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +27,9 @@ export default function SchoolScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState('الكل');
   const [selectedDriverReport, setSelectedDriverReport] = useState('الكل');
+  const [showDriverForm, setShowDriverForm] = useState(false);
+  const [showSpeedPicker, setShowSpeedPicker] = useState(false);
+  const speedOptions = [50, 60, 70, 80, 90, 100, 110, 120];
 
   const [dynamicSchoolName, setDynamicSchoolName] = useState("");
 
@@ -96,7 +99,7 @@ export default function SchoolScreen({ route, navigation }) {
   const startEdit = (item) => {
     setFormData(item);
     setEditingId(item.id);
-    // التمرير للأعلى لرؤية حقول التعديل
+    if (activeTab === 'drivers') setShowDriverForm(true);
   };
 
   const renderInput = (placeholder, field, isPassword = false, isNumeric = false) => (
@@ -139,7 +142,10 @@ export default function SchoolScreen({ route, navigation }) {
 
   const filteredReports = useMemo(() => {
     if (selectedDriverReport === 'الكل') return reports;
-    return reports.filter(r => r.driverId === selectedDriverReport);
+    return reports.filter(r => {
+      const driverKey = r.driverId;
+      return driverKey === selectedDriverReport;
+    });
   }, [reports, selectedDriverReport]);
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
@@ -169,7 +175,7 @@ export default function SchoolScreen({ route, navigation }) {
             { id: 'emergencies', label: 'الطوارئ' },
             { id: 'managers', label: 'الإدارة' }
           ].map(tab => (
-            <TouchableOpacity key={tab.id} style={[styles.tabGridItem, activeTab === tab.id && styles.activeTabGrid]} onPress={() => { setActiveTab(tab.id); setFormData({}); setEditingId(null); }}>
+            <TouchableOpacity key={tab.id} style={[styles.tabGridItem, activeTab === tab.id && styles.activeTabGrid]} onPress={() => { setActiveTab(tab.id); setFormData({}); setEditingId(null); setShowDriverForm(false); }}>
               <Text style={[styles.tabGridText, activeTab === tab.id && styles.activeTabGridText]}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
@@ -177,26 +183,84 @@ export default function SchoolScreen({ route, navigation }) {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* قسم الإضافة الثابت في الأعلى */}
-        {['drivers', 'staff', 'parents', 'students', 'managers'].includes(activeTab) && (
+        {/* زر إضافة سائق للسائقين فقط */}
+        {activeTab === 'drivers' && !showDriverForm && (
+          <View style={styles.addButtonContainer}>
+            <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowDriverForm(true); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.addDriverBtnText}>+ إضافة سائق جديد</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* نموذج السائقين */}
+        {activeTab === 'drivers' && showDriverForm && (
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>{editingId ? 'تعديل البيانات' : `إضافة ${activeTab === 'drivers' ? 'سائق جديد' : activeTab === 'staff' ? 'مرافق جديد' : activeTab === 'parents' ? 'ولي أمر جديد' : activeTab === 'students' ? 'طالب جديد' : 'مدير جديد'}`}</Text>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات السائق' : 'إضافة سائق جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            {renderInput('رقم الهاتف', 'phone', false, true)}
+            {renderInput('رقم الباص', 'bus_number')}
+            
+            {/* قائمة السرعة */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>السرعة القصوى المسموحة (كم/س):</Text>
+              <TouchableOpacity style={styles.speedPickerBtn} onPress={() => setShowSpeedPicker(true)}>
+                <Text style={styles.speedPickerText}>{formData.max_speed || 'اختر السرعة'}</Text>
+                <Text style={styles.speedPickerArrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal لاختيار السرعة */}
+            {showSpeedPicker && (
+              <View style={styles.speedPickerModal}>
+                <Text style={styles.speedPickerTitle}>اختر السرعة القصوى:</Text>
+                <ScrollView style={styles.speedPickerList}>
+                  {speedOptions.map(speed => (
+                    <TouchableOpacity 
+                      key={speed} 
+                      style={[styles.speedOption, formData.max_speed === speed && styles.speedOptionActive]}
+                      onPress={() => { setFormData({ ...formData, max_speed: speed }); setShowSpeedPicker(false); }}
+                    >
+                      <Text style={[styles.speedOptionText, formData.max_speed === speed && styles.speedOptionTextActive]}>{speed} كم/س</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity style={styles.speedPickerClose} onPress={() => setShowSpeedPicker(false)}>
+                  <Text style={styles.speedPickerCloseText}>إغلاق</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Text style={styles.sectionLabel}>صلاحيات السائق:</Text>
+            {renderPermission('بدء الرحلة وبث الموقع', 'canStartTrip')}
+            {renderPermission('رؤية موقع الطلاب', 'canViewStudents')}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowDriverForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* نماذج باقي الأقسام */}
+        {['staff', 'parents', 'students', 'managers'].includes(activeTab) && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل البيانات' : `إضافة ${activeTab === 'staff' ? 'مرافق جديد' : activeTab === 'parents' ? 'ولي أمر جديد' : activeTab === 'students' ? 'طالب جديد' : 'مدير جديد'}`}</Text>
             
             {renderInput('الاسم الكامل', 'name')}
             {renderInput('اسم المستخدم', 'username')}
             {renderInput('كلمة المرور', 'password', true)}
             {activeTab !== 'students' && renderInput('رقم الهاتف', 'phone', false, true)}
             
-            {activeTab === 'drivers' && (
-              <>
-                {renderInput('رقم الباص', 'bus_number')}
-                {renderInput('السرعة القصوى المسموحة (كم/س)', 'max_speed', false, true)}
-                <Text style={styles.sectionLabel}>صلاحيات السائق:</Text>
-                {renderPermission('بدء الرحلة وبث الموقع', 'canStartTrip')}
-                {renderPermission('رؤية موقع الطلاب', 'canViewStudents')}
-              </>
-            )}
-
             {activeTab === 'staff' && (
               <>
                 <Text style={styles.sectionLabel}>ربط المرافقة بالسائق:</Text>
@@ -379,16 +443,27 @@ const styles = StyleSheet.create({
   activeTabGrid: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   tabGridText: { color: '#64748B', fontWeight: 'bold', fontSize: 11, textAlign: 'center' },
   activeTabGridText: { color: '#FFF' },
-  tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginHorizontal: 5, backgroundColor: '#F8FAFC' },
-  activeTab: { backgroundColor: '#3B82F6' },
-  tabText: { color: '#64748B', fontWeight: 'bold' },
-  activeTabText: { color: '#FFF' },
   content: { flex: 1 },
+  addButtonContainer: { padding: 15 },
+  addDriverBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 10, alignItems: 'center' },
+  addDriverBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   formCard: { backgroundColor: '#FFF', margin: 15, padding: 15, borderRadius: 15, elevation: 3 },
   formTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 15, textAlign: 'right', color: '#3B82F6' },
   inputWrapper: { marginBottom: 12 },
   inputLabel: { fontSize: 13, color: '#64748B', textAlign: 'right', marginBottom: 5, fontWeight: 'bold' },
   input: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, textAlign: 'right', borderWidth: 1, borderColor: '#E2E8F0', color: '#1E293B' },
+  speedPickerBtn: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  speedPickerText: { color: '#1E293B', fontSize: 14, fontWeight: '500' },
+  speedPickerArrow: { color: '#64748B', fontSize: 12 },
+  speedPickerModal: { backgroundColor: '#FFF', borderRadius: 12, padding: 15, marginVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  speedPickerTitle: { fontSize: 14, fontWeight: 'bold', color: '#1E293B', marginBottom: 10, textAlign: 'center' },
+  speedPickerList: { maxHeight: 200, marginBottom: 10 },
+  speedOption: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, backgroundColor: '#F8FAFC', marginVertical: 4, borderWidth: 1, borderColor: '#E2E8F0' },
+  speedOptionActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  speedOptionText: { color: '#64748B', fontSize: 14, textAlign: 'center' },
+  speedOptionTextActive: { color: '#FFF', fontWeight: 'bold' },
+  speedPickerClose: { backgroundColor: '#EF4444', padding: 10, borderRadius: 8, alignItems: 'center' },
+  speedPickerCloseText: { color: '#FFF', fontWeight: 'bold' },
   row: { flexDirection: 'row-reverse' },
   saveBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 15 },
   saveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
