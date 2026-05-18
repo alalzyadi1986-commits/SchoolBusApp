@@ -27,14 +27,17 @@ export default function SchoolScreen({ route, navigation }) {
   const [selectedClassFilter, setSelectedClassFilter] = useState('الكل');
   const [selectedDriverReport, setSelectedDriverReport] = useState('الكل');
 
+  const [dynamicSchoolName, setDynamicSchoolName] = useState("");
+
   useEffect(() => {
     if (!schoolId) return;
 
     onValue(ref(db, `schools/${schoolId}`), (snap) => {
       const data = snap.val();
       if (data) {
-        setExpiryDate(data.expiryDate || '');
-        const exp = new Date(data.expiryDate);
+        setDynamicSchoolName(data.name || "");
+        setExpiryDate(data.endDate || '');
+        const exp = new Date(data.endDate);
         setIsExpired(exp < new Date());
       }
     });
@@ -145,9 +148,9 @@ export default function SchoolScreen({ route, navigation }) {
       <View style={styles.header}>
         <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.schoolName}>{schoolName}</Text>
+          <Text style={styles.schoolName}>{dynamicSchoolName}</Text>
           <Text style={[styles.expiryText, { color: isExpired ? '#EF4444' : '#10B981' }]}>
-            {isExpired ? 'الاشتراك منتهي ❌' : `مشترك لغاية: ${expiryDate} ✅`}
+            {isExpired ? 'الاشتراك منتهي ❌' : `مشترك لغاية: ${expiryDate ? new Date(expiryDate).toLocaleDateString('ar-EG') : ''} ✅`}
           </Text>
         </View>
       </View>
