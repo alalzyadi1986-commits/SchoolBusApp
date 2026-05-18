@@ -26,6 +26,7 @@ export default function SchoolScreen() {
   const [studentsList, setStudentsList] = useState([]);
   const [emergencies, setEmergencies] = useState([]);
   const [reports, setReports] = useState([]);
+  const [selectedReportDriver, setSelectedReportDriver] = useState('الكل');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilterClass, setSelectedFilterClass] = useState('الكل');
@@ -40,6 +41,7 @@ export default function SchoolScreen() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [busNumber, setBusNumber] = useState('');
+  const [maxSpeed, setMaxSpeed] = useState('80');
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [studentClass, setStudentClass] = useState('');
   const [studentSection, setStudentSection] = useState('');
@@ -79,8 +81,6 @@ export default function SchoolScreen() {
               .map(key => ({ id: key, ...data.emergencies[key] }))
               .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             setEmergencies(list);
-            const activeAlert = list.find(e => e.status === 'active');
-            if (activeAlert) Alert.alert('⚠️ تنبيه طوارئ', `هناك بلاغ طوارئ نشط من ${activeAlert.senderName}`);
           } else setEmergencies([]);
 
           if (data.reports) {
@@ -102,7 +102,7 @@ export default function SchoolScreen() {
 
   const resetForm = () => {
     setEditingId(null); setUsername(''); setPassword(''); setName(''); setPhone('');
-    setBusNumber(''); setSelectedDriverId(''); setStudentClass(''); setStudentSection('');
+    setBusNumber(''); setMaxSpeed('80'); setSelectedDriverId(''); setStudentClass(''); setStudentSection('');
     setSelectedParentId(''); setSelectedDriverForStudent(''); setSelectedStaffForStudent('');
     setPermissions({ viewLocation: true, markAttendance: true, contactParents: false, editStudents: false, addStudentsAndLocation: false, canStartTrip: true });
   };
@@ -113,7 +113,7 @@ export default function SchoolScreen() {
     if (item) {
       setEditingId(item.username || item.id); setUsername(item.username || ''); setName(item.name || item.family_name || '');
       setPassword(item.password || ''); setPhone(item.phone || '');
-      if (type === 'driver') { setBusNumber(item.bus_number || ''); if (item.permissions) setPermissions(item.permissions); }
+      if (type === 'driver') { setBusNumber(item.bus_number || ''); setMaxSpeed(item.max_speed || '80'); if (item.permissions) setPermissions(item.permissions); }
       if (type === 'staff') { setSelectedDriverId(item.driver_id || ''); if (item.permissions) setPermissions(item.permissions); }
       if (type === 'student') { setStudentClass(item.class || ''); setStudentSection(item.section || ''); setSelectedParentId(item.parent_username || ''); setSelectedDriverForStudent(item.driver_id || ''); setSelectedStaffForStudent(item.staff_id || ''); }
     }
@@ -126,7 +126,7 @@ export default function SchoolScreen() {
       setLoading(true);
       let data = { name, password, phone, role: modalType };
       if (editingId && modalType !== 'student' && editingId !== username) await remove(ref(db, `schools/${schoolId}/${modalType}s/${editingId}`));
-      if (modalType === 'driver') { data.bus_number = busNumber; data.permissions = permissions; }
+      if (modalType === 'driver') { data.bus_number = busNumber; data.max_speed = maxSpeed; data.permissions = permissions; }
       if (modalType === 'staff') { data.driver_id = selectedDriverId; data.permissions = permissions; }
       if (modalType === 'parent') data.family_name = name;
       if (modalType === 'student') {
@@ -149,6 +149,10 @@ export default function SchoolScreen() {
 
   const filteredStudents = useMemo(() => studentsList.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) && (selectedFilterClass === 'الكل' || `${s.class} - ${s.section}` === selectedFilterClass)), [studentsList, searchQuery, selectedFilterClass]);
   const groupedStudents = filteredStudents.reduce((acc, s) => { const k = `${s.class || 'بدون صف'} - ${s.section || 'بدون شعبة'}`; if (!acc[k]) acc[k] = []; acc[k].push(s); return acc; }, {});
+
+  const filteredReports = useMemo(() => {
+    return reports.filter(r => selectedReportDriver === 'الكل' || r.message.includes(selectedReportDriver));
+  }, [reports, selectedReportDriver]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -197,20 +201,38 @@ export default function SchoolScreen() {
             ListEmptyComponent={<Text style={styles.emptyText}>لا توجد بلاغات طوارئ حالياً</Text>}
           />
         ) : activeTab === 'reports' ? (
-          <FlatList
-            data={reports}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.reportCard}>
-                <View style={styles.reportHeader}>
-                  <Text style={styles.reportDate}>{new Date(item.timestamp).toLocaleDateString('ar-EG')}</Text>
-                  <Text style={styles.reportType}>{item.type === 'attendance' ? 'سجل حضور' : 'بلاغ غياب'}</Text>
+          <>
+            <View style={styles.reportFilterBar}>
+              <Text style={styles.reportFilterLabel}>فلترة حسب السائق:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {['الكل', ...driversList.map(d => d.name)].map(name => (
+                  <TouchableOpacity 
+                    key={name} 
+                    style={[styles.reportFilterBtn, selectedReportDriver === name && styles.reportFilterBtnActive]}
+                    onPress={() => setSelectedReportDriver(name)}
+                  >
+                    <Text style={[styles.reportFilterBtnText, selectedReportDriver === name && styles.reportFilterBtnTextActive]}>{name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            <FlatList
+              data={filteredReports}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.reportCard}>
+                  <View style={styles.reportHeader}>
+                    <Text style={styles.reportDate}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
+                    <Text style={styles.reportType}>
+                      {item.type === 'attendance' ? 'سجل حضور' : item.type === 'absence' ? 'بلاغ غياب' : item.type === 'speed' ? 'تجاوز سرعة' : 'طوارئ'}
+                    </Text>
+                  </View>
+                  <Text style={styles.reportContent}>{item.message}</Text>
                 </View>
-                <Text style={styles.reportContent}>{item.message}</Text>
-              </View>
-            )}
-            ListEmptyComponent={<Text style={styles.emptyText}>لا توجد تقارير حالياً</Text>}
-          />
+              )}
+              ListEmptyComponent={<Text style={styles.emptyText}>لا توجد تقارير حالياً</Text>}
+            />
+          </>
         ) : (
           <>
             {activeTab === 'drivers' && <View style={styles.listHeaderBar}><Text style={styles.listHeaderText}>قائمة أسماء السائقين ({driversList.length})</Text></View>}
@@ -230,7 +252,7 @@ export default function SchoolScreen() {
                     <TouchableOpacity onPress={() => openModal(activeTab.slice(0, -1), item)}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDelete(`${activeTab}/${item.username}`, activeTab)}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
                   </View>
-                  <View style={styles.rowInfo}><Text style={styles.rowName}>{item.name || item.family_name}</Text><Text style={styles.rowSub}>{item.username} {item.bus_number ? `| باص: ${item.bus_number}` : ''}</Text></View>
+                  <View style={styles.rowInfo}><Text style={styles.rowName}>{item.name || item.family_name}</Text><Text style={styles.rowSub}>{item.username} {item.bus_number ? `| باص: ${item.bus_number}` : ''} {item.max_speed ? `| السرعة: ${item.max_speed}` : ''}</Text></View>
                 </View>
               )}
               ListHeaderComponent={activeTab === 'students' ? (
@@ -256,43 +278,58 @@ export default function SchoolScreen() {
       <Modal visible={showModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingId ? 'تعديل البيانات' : 'إضافة جديد'}</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.inputGroup}><Text style={styles.inputLabel}>الاسم الكامل</Text><TextInput style={styles.input} placeholder="أدخل الاسم هنا..." value={name} onChangeText={setName} /></View>
-              {modalType !== 'student' && <View style={styles.inputGroup}><Text style={styles.inputLabel}>اسم المستخدم</Text><TextInput style={styles.input} placeholder="أدخل اسم المستخدم..." value={username} onChangeText={setUsername} autoCapitalize="none" /></View>}
-              {modalType !== 'student' && <View style={styles.inputGroup}><Text style={styles.inputLabel}>كلمة المرور</Text><TextInput style={styles.input} placeholder="أدخل كلمة المرور..." value={password} onChangeText={setPassword} /></View>}
-              {modalType !== 'student' && <View style={styles.inputGroup}><Text style={styles.inputLabel}>رقم الهاتف</Text><TextInput style={styles.input} placeholder="أدخل رقم الهاتف..." value={phone} onChangeText={setPhone} keyboardType="phone-pad" /></View>}
+            <Text style={styles.modalTitle}>{editingId ? 'تعديل' : 'إضافة'} {modalType === 'driver' ? 'سائق' : modalType === 'staff' ? 'مرافق' : modalType === 'parent' ? 'حساب عائلة' : 'طالب'}</Text>
+            <ScrollView style={{maxHeight: 400}}>
+              <TextInput style={styles.modalInput} placeholder="الاسم الكامل" value={name} onChangeText={setName} />
+              {modalType !== 'student' && (
+                <>
+                  <TextInput style={[styles.modalInput, editingId && {backgroundColor: '#f1f5f9'}]} placeholder="اسم المستخدم" value={username} onChangeText={setUsername} editable={!editingId} />
+                  <TextInput style={styles.modalInput} placeholder="كلمة المرور" value={password} onChangeText={setPassword} />
+                </>
+              )}
+              <TextInput style={styles.modalInput} placeholder="رقم الهاتف" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              
               {modalType === 'driver' && (
-                <View>
-                  <View style={styles.inputGroup}><Text style={styles.inputLabel}>رقم الباص</Text><TextInput style={styles.input} placeholder="أدخل رقم الباص..." value={busNumber} onChangeText={setBusNumber} /></View>
-                  <Text style={styles.subTitle}>صلاحيات السائق:</Text>
-                  <PermissionToggle label="بدء الرحلة وبث الموقع" value={permissions.canStartTrip} onToggle={() => setPermissions({...permissions, canStartTrip: !permissions.canStartTrip})} />
-                  <PermissionToggle label="رؤية موقع الطلاب" value={permissions.viewLocation} onToggle={() => setPermissions({...permissions, viewLocation: !permissions.viewLocation})} />
-                </View>
+                <>
+                  <TextInput style={styles.modalInput} placeholder="رقم الباص" value={busNumber} onChangeText={setBusNumber} />
+                  <TextInput style={styles.modalInput} placeholder="السرعة القصوى (كم/س)" value={maxSpeed} onChangeText={setMaxSpeed} keyboardType="numeric" />
+                </>
               )}
+
               {modalType === 'staff' && (
-                <View>
-                  <Text style={styles.subTitle}>ربط مع سائق:</Text>
-                  <ScrollView horizontal style={styles.horizontalSelect}>
-                    <TouchableOpacity style={[styles.selectItem, selectedDriverId === '' && styles.selectedItem]} onPress={() => setSelectedDriverId('')}><Text style={[styles.selectText, selectedDriverId === '' && styles.selectedText]}>بدون ربط</Text></TouchableOpacity>
-                    {driversList.map(d => <TouchableOpacity key={d.username} style={[styles.selectItem, selectedDriverId === d.username && styles.selectedItem]} onPress={() => setSelectedDriverId(d.username)}><Text style={[styles.selectText, selectedDriverId === d.username && styles.selectedText]}>{d.name}</Text></TouchableOpacity>)}
+                <View style={styles.selectorContainer}>
+                  <Text style={styles.selectorLabel}>ربط مع السائق:</Text>
+                  <ScrollView horizontal>
+                    {driversList.map(d => (
+                      <TouchableOpacity key={d.username} style={[styles.selectorBtn, selectedDriverId === d.username && styles.selectorBtnActive]} onPress={() => setSelectedDriverId(d.username)}>
+                        <Text style={[styles.selectorBtnText, selectedDriverId === d.username && styles.selectorBtnTextActive]}>{d.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity style={[styles.selectorBtn, !selectedDriverId && styles.selectorBtnActive]} onPress={() => setSelectedDriverId('')}><Text style={[styles.selectorBtnText, !selectedDriverId && styles.selectorBtnTextActive]}>بدون ربط</Text></TouchableOpacity>
                   </ScrollView>
-                  <Text style={styles.subTitle}>صلاحيات المرافقة:</Text>
-                  <PermissionToggle label="رؤية الموقع" value={permissions.viewLocation} onToggle={() => setPermissions({...permissions, viewLocation: !permissions.viewLocation})} /><PermissionToggle label="تسجيل الحضور" value={permissions.markAttendance} onToggle={() => setPermissions({...permissions, markAttendance: !permissions.markAttendance})} /><PermissionToggle label="إضافة طلاب ومواقع" value={permissions.addStudentsAndLocation} onToggle={() => setPermissions({...permissions, addStudentsAndLocation: !permissions.addStudentsAndLocation})} />
                 </View>
               )}
+
               {modalType === 'student' && (
-                <View>
-                  <View style={styles.inputGroup}><Text style={styles.inputLabel}>الصف</Text><TextInput style={styles.input} placeholder="مثلاً: الأول" value={studentClass} onChangeText={setStudentClass} /></View><View style={styles.inputGroup}><Text style={styles.inputLabel}>الشعبة</Text><TextInput style={styles.input} placeholder="مثلاً: أ" value={studentSection} onChangeText={setStudentSection} /></View>
-                  <Text style={styles.subTitle}>الارتباطات:</Text>
-                  <SelectionList label="ولي الأمر" data={parentsList} selected={selectedParentId} onSelect={setSelectedParentId} displayKey="family_name" emptyLabel="فك الارتباط" />
-                  <SelectionList label="السائق" data={driversList} selected={selectedDriverForStudent} onSelect={setSelectedDriverForStudent} displayKey="name" emptyLabel="بدون سائق" />
-                  <SelectionList label="المرافقة" data={staffList} selected={selectedStaffForStudent} onSelect={setSelectedStaffForStudent} displayKey="name" emptyLabel="بدون مرافقة" />
-                </View>
+                <>
+                  <TextInput style={styles.modalInput} placeholder="الصف (مثلاً: الأول)" value={studentClass} onChangeText={setStudentClass} />
+                  <TextInput style={styles.modalInput} placeholder="الشعبة (مثلاً: أ)" value={studentSection} onChangeText={setStudentSection} />
+                  <Text style={styles.selectorLabel}>ربط مع ولي الأمر:</Text>
+                  <ScrollView horizontal>
+                    {parentsList.map(p => (
+                      <TouchableOpacity key={p.username} style={[styles.selectorBtn, selectedParentId === p.username && styles.selectorBtnActive]} onPress={() => setSelectedParentId(p.username)}>
+                        <Text style={[styles.selectorBtnText, selectedParentId === p.username && styles.selectorBtnTextActive]}>{p.family_name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
               )}
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>{loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>حفظ البيانات</Text>}</TouchableOpacity>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setShowModal(false)}><Text style={styles.closeBtnText}>إلغاء</Text></TouchableOpacity>
             </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={handleSave} disabled={loading}>{loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>حفظ</Text>}</TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setShowModal(false)}><Text style={styles.cancelBtnText}>إلغاء</Text></TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -300,82 +337,75 @@ export default function SchoolScreen() {
   );
 }
 
-const PermissionToggle = ({ label, value, onToggle }) => (
-  <TouchableOpacity style={styles.permissionRow} onPress={onToggle}><View style={[styles.checkbox, value && styles.checkboxChecked]}>{value && <Text style={styles.checkboxTick}>✓</Text>}</View><Text style={styles.permissionLabel}>{label}</Text></TouchableOpacity>
-);
-
-const SelectionList = ({ label, data, selected, onSelect, displayKey, emptyLabel }) => (
-  <View><Text style={styles.subTitle}>{label}:</Text><ScrollView horizontal style={styles.horizontalSelect}><TouchableOpacity style={[styles.selectItem, selected === '' && styles.selectedItem]} onPress={() => onSelect('')}><Text style={[styles.selectText, selected === '' && styles.selectedText]}>{emptyLabel}</Text></TouchableOpacity>{data.map(item => <TouchableOpacity key={item.username} style={[styles.selectItem, selected === item.username && styles.selectedItem]} onPress={() => onSelect(item.username)}><Text style={[styles.selectText, selected === item.username && styles.selectedText]}>{item[displayKey]}</Text></TouchableOpacity>)}</ScrollView></View>
-);
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 2 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  subscriptionInfo: { fontSize: 11, color: '#10B981', fontWeight: '600' },
+  subscriptionInfo: { fontSize: 12, color: '#10B981', marginTop: 4, fontWeight: 'bold' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
-  tabBar: { flexDirection: 'row', backgroundColor: '#FFF', paddingVertical: 5 },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10, position: 'relative' },
+  tabBar: { flexDirection: 'row-reverse', backgroundColor: '#FFF', paddingHorizontal: 5, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  tabItem: { paddingVertical: 12, paddingHorizontal: 10, alignItems: 'center', flex: 1 },
   activeTabItem: { borderBottomWidth: 3, borderBottomColor: '#3B82F6' },
-  tabText: { color: '#64748B', fontSize: 11 },
-  activeTabText: { color: '#3B82F6', fontWeight: 'bold' },
-  badge: { position: 'absolute', top: 8, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-  content: { flex: 1, padding: 15 },
-  listHeaderBar: { backgroundColor: '#E2E8F0', padding: 12, borderRadius: 10, marginBottom: 15 },
-  listHeaderText: { textAlign: 'right', fontWeight: 'bold', color: '#1E293B', fontSize: 14 },
-  searchFilterContainer: { flexDirection: 'row-reverse', marginBottom: 15, alignItems: 'center' },
+  tabText: { fontSize: 12, color: '#64748B', fontWeight: 'bold' },
+  activeTabText: { color: '#3B82F6' },
+  badge: { position: 'absolute', top: 10, right: 5, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+  content: { flex: 1, padding: 10 },
+  listHeaderBar: { backgroundColor: '#E2E8F0', padding: 8, borderRadius: 8, marginBottom: 10 },
+  listHeaderText: { textAlign: 'right', fontSize: 13, fontWeight: 'bold', color: '#475569' },
+  searchFilterContainer: { flexDirection: 'row-reverse', marginBottom: 10, alignItems: 'center' },
   searchInput: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginLeft: 10 },
-  filterDropdown: { backgroundColor: '#3B82F6', padding: 10, borderRadius: 10, minWidth: 100, alignItems: 'center' },
+  filterDropdown: { backgroundColor: '#3B82F6', padding: 10, borderRadius: 10 },
   filterText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
-  mainAddBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 12, alignItems: 'center', marginBottom: 15 },
+  mainAddBtn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 15 },
   mainAddBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
-  dataRow: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 1 },
-  rowActions: { flexDirection: 'row' },
-  editText: { color: '#3B82F6', fontWeight: 'bold', marginRight: 15 },
-  deleteText: { color: '#EF4444', fontWeight: 'bold' },
-  rowInfo: { alignItems: 'flex-end' },
-  rowName: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
+  dataRow: { flexDirection: 'row-reverse', backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8, elevation: 1, justifyContent: 'space-between', alignItems: 'center' },
+  rowInfo: { alignItems: 'flex-end', flex: 1 },
+  rowName: { fontSize: 15, fontWeight: 'bold', color: '#1E293B' },
   rowSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  groupContainer: { marginBottom: 20 },
-  groupHeader: { fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginBottom: 10, textAlign: 'right', backgroundColor: '#E2E8F0', padding: 8, borderRadius: 8 },
-  emergencyCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, elevation: 2, borderRightWidth: 5, borderRightColor: '#E2E8F0' },
-  emergencyCardActive: { borderRightColor: '#EF4444', backgroundColor: '#FEF2F2' },
-  emergencyHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  emergencyTime: { fontSize: 12, color: '#64748B' },
-  emergencySender: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
-  emergencyMsg: { fontSize: 14, color: '#475569', textAlign: 'right', marginBottom: 15 },
+  rowActions: { flexDirection: 'row' },
+  editText: { color: '#3B82F6', fontWeight: 'bold', marginLeft: 15, fontSize: 13 },
+  deleteText: { color: '#EF4444', fontWeight: 'bold', fontSize: 13 },
+  groupContainer: { marginBottom: 15 },
+  groupHeader: { textAlign: 'right', fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginBottom: 8, paddingRight: 5 },
+  emergencyCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, borderLeftWidth: 5, borderLeftColor: '#E2E8F0' },
+  emergencyCardActive: { borderLeftColor: '#EF4444', backgroundColor: '#FFF5F5' },
+  emergencyHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 8 },
+  emergencyTime: { fontSize: 11, color: '#64748B' },
+  emergencySender: { fontSize: 13, fontWeight: 'bold', color: '#EF4444' },
+  emergencyMsg: { fontSize: 14, color: '#1E293B', textAlign: 'right', marginBottom: 12 },
   emergencyActions: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   resolveBtn: { backgroundColor: '#10B981', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
   resolveBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   mapBtn: { backgroundColor: '#3B82F6', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
   mapBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   resolvedText: { fontSize: 11, color: '#10B981', fontWeight: 'bold' },
-  reportCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, elevation: 1, borderLeftWidth: 4, borderLeftColor: '#3B82F6' },
-  reportHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  reportDate: { fontSize: 12, color: '#64748B' },
-  reportType: { fontSize: 12, fontWeight: 'bold', color: '#3B82F6' },
+  reportCard: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8 },
+  reportHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', marginBottom: 8, paddingBottom: 5 },
+  reportDate: { fontSize: 11, color: '#64748B' },
+  reportType: { fontSize: 11, fontWeight: 'bold', color: '#3B82F6' },
   reportContent: { fontSize: 14, color: '#1E293B', textAlign: 'right' },
-  emptyText: { textAlign: 'center', color: '#64748B', marginTop: 50 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 20, maxHeight: '90%' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  inputGroup: { marginBottom: 15 },
-  inputLabel: { fontSize: 13, color: '#64748B', textAlign: 'right', marginBottom: 5, fontWeight: '600' },
-  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 10, textAlign: 'right', borderWidth: 1, borderColor: '#E2E8F0' },
-  subTitle: { fontSize: 14, fontWeight: 'bold', marginVertical: 10, textAlign: 'right' },
-  horizontalSelect: { flexDirection: 'row-reverse', marginBottom: 15 },
-  selectItem: { paddingHorizontal: 15, paddingVertical: 8, backgroundColor: '#F1F5F9', borderRadius: 20, marginLeft: 10 },
-  selectedItem: { backgroundColor: '#3B82F6' },
-  selectText: { fontSize: 12, color: '#64748B' },
-  selectedText: { color: '#FFF', fontWeight: 'bold' },
-  permissionRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 15 },
-  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#3B82F6', borderRadius: 6, marginLeft: 10, justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#3B82F6' },
-  checkboxTick: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
-  permissionLabel: { fontSize: 14, color: '#1E293B' },
-  saveBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 20 },
+  reportFilterBar: { padding: 10, backgroundColor: '#F1F5F9', marginBottom: 10, borderRadius: 10 },
+  reportFilterLabel: { fontSize: 12, fontWeight: 'bold', color: '#64748B', marginBottom: 5, textAlign: 'right' },
+  reportFilterBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: '#FFF', marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  reportFilterBtnActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  reportFilterBtnText: { fontSize: 12, color: '#64748B' },
+  reportFilterBtnTextActive: { color: '#FFF', fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '90%', backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'center', marginBottom: 20 },
+  modalInput: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 12, textAlign: 'right' },
+  selectorContainer: { marginBottom: 15 },
+  selectorLabel: { fontSize: 13, fontWeight: 'bold', color: '#475569', textAlign: 'right', marginBottom: 8 },
+  selectorBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#F1F5F9', marginRight: 8 },
+  selectorBtnActive: { backgroundColor: '#3B82F6' },
+  selectorBtnText: { fontSize: 12, color: '#64748B' },
+  selectorBtnTextActive: { color: '#FFF', fontWeight: 'bold' },
+  modalActions: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 20 },
+  modalBtn: { flex: 0.48, padding: 12, borderRadius: 10, alignItems: 'center' },
+  saveBtn: { backgroundColor: '#3B82F6' },
   saveBtnText: { color: '#FFF', fontWeight: 'bold' },
-  closeBtn: { padding: 15, alignItems: 'center' },
-  closeBtnText: { color: '#64748B', fontWeight: 'bold' }
+  cancelBtn: { backgroundColor: '#F1F5F9' },
+  cancelBtnText: { color: '#64748B', fontWeight: 'bold' },
+  emptyText: { textAlign: 'center', color: '#64748B', marginTop: 50 }
 });

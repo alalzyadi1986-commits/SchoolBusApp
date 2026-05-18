@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, 
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ref, onValue, update, push } from "firebase/database";
+import { ref, onValue, update, push, set } from "firebase/database";
 import { db } from '../firebaseConfig';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,10 +18,15 @@ export default function DriverScreen() {
   const [students, setStudents] = useState([]);
   const [isTripActive, setIsTripActive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [speedAlertSent, setSpeedAlertSent] = useState(false);
+  
   const locationSubscription = useRef(null);
+  const stopTimers = useRef({}); // لتتبع وقت توقف الباص عند كل منزل
 
   useEffect(() => {
     if (!schoolId || !user?.username) return;
+
     const studentsRef = ref(db, `schools/${schoolId}/students`);
     const unsubscribeStudents = onValue(studentsRef, (snapshot) => {
       const data = snapshot.val();
@@ -32,6 +37,7 @@ export default function DriverScreen() {
       } else { setStudents([]); }
       setLoading(false);
     });
+
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
@@ -39,6 +45,7 @@ export default function DriverScreen() {
         setCurrentLoc(loc.coords);
       }
     })();
+
     return () => { unsubscribeStudents(); stopTracking(); };
   }, [schoolId, user]);
 
@@ -46,14 +53,35 @@ export default function DriverScreen() {
     if (user?.permissions && !user.permissions.canStartTrip) { Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية بدء الرحلة'); return; }
     setIsTripActive(true);
     locationSubscription.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+      { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
       (loc) => {
+        const { latitude, longitude, speed } = loc.coords;
+        const speedKmH = Math.max(0, Math.round((speed || 0) * 3.6));
         setCurrentLoc(loc.coords);
+        setCurrentSpeed(speedKmH);
+
+        // تحديث الموقع في Firebase
         update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
-          latitude: loc.coords.latitude, longitude: loc.coords.longitude,
+          latitude, longitude, speed: speedKmH,
           updatedAt: new Date().toISOString(), driverName: user.name,
           busNumber: user.bus_number, isActive: true
         });
+
+        // 1. مراقبة السرعة
+        const maxSpeedAllowed = parseInt(user.max_speed || 80);
+        if (speedKmH > maxSpeedAllowed && !speedAlertSent) {
+          sendSpeedAlert(speedKmH);
+          setSpeedAlertSent(true);
+        } else if (speedKmH <= maxSpeedAllowed) {
+          setSpeedAlertSent(false);
+        }
+
+        // 2. نظام التحضير التلقائي (التوقف لمدة 10 ثوانٍ عند منزل الطالب)
+        if (speedKmH < 5) { // الباص متوقف أو يتحرك ببطء شديد
+          checkAutoAttendance(latitude, longitude);
+        } else {
+          stopTimers.current = {};
+        }
       }
     );
   };
@@ -62,6 +90,52 @@ export default function DriverScreen() {
     if (locationSubscription.current) { locationSubscription.current.remove(); locationSubscription.current = null; }
     if (schoolId && user?.username) { update(ref(db, `schools/${schoolId}/bus/${user.username}`), { isActive: false, updatedAt: new Date().toISOString() }); }
     setIsTripActive(false);
+    setCurrentSpeed(0);
+  };
+
+  const sendSpeedAlert = async (speed) => {
+    const reportRef = ref(db, `schools/${schoolId}/reports`);
+    const newReport = push(reportRef);
+    await set(newReport, {
+      type: 'speed',
+      timestamp: new Date().toISOString(),
+      message: `تنبيه: السائق ${user.name} تجاوز السرعة المحددة (${user.max_speed} كم/س) حيث بلغت سرعته الحالية ${speed} كم/س.`,
+      driverId: user.username
+    });
+  };
+
+  const checkAutoAttendance = (lat, lon) => {
+    students.forEach(student => {
+      if (student.status === 'pending' && student.latitude && student.longitude) {
+        const dist = calculateDistance(lat, lon, student.latitude, student.longitude);
+        if (dist < 0.05) { // المسافة أقل من 50 متر
+          const now = Date.now();
+          if (!stopTimers.current[student.id]) {
+            stopTimers.current[student.id] = now;
+          } else if (now - stopTimers.current[student.id] >= 10000) { // توقف لمدة 10 ثوانٍ
+            markStudentPresent(student);
+            delete stopTimers.current[student.id];
+          }
+        }
+      }
+    });
+  };
+
+  const markStudentPresent = async (student) => {
+    await update(ref(db, `schools/${schoolId}/students/${student.id}`), {
+      status: 'present',
+      presentAt: new Date().toISOString()
+    });
+    
+    const reportRef = ref(db, `schools/${schoolId}/reports`);
+    const newReport = push(reportRef);
+    await set(newReport, {
+      type: 'attendance',
+      timestamp: new Date().toISOString(),
+      message: `تحضير تلقائي: الطالب ${student.name} صعد الباص (توقف السائق ${user.name} عند الموقع لمدة 10 ثوانٍ).`,
+      driverId: user.username,
+      studentId: student.id
+    });
   };
 
   const sendEmergency = () => {
@@ -89,6 +163,14 @@ export default function DriverScreen() {
     }, { onlyOnce: true });
   };
 
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  }
+
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
@@ -98,6 +180,17 @@ export default function DriverScreen() {
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>لوحة السائق 🚌</Text>
           <Text style={styles.driverName}>{user?.name} | باص {user?.bus_number}</Text>
+        </View>
+      </View>
+
+      <View style={styles.speedCard}>
+        <View style={styles.speedInfo}>
+          <Text style={styles.speedValue}>{currentSpeed}</Text>
+          <Text style={styles.speedUnit}>كم/س</Text>
+        </View>
+        <View style={styles.speedLimit}>
+          <Text style={styles.limitText}>السرعة المحددة: {user?.max_speed || 80}</Text>
+          {currentSpeed > (user?.max_speed || 80) && <Text style={styles.speedWarning}>⚠️ تجاوز السرعة!</Text>}
         </View>
       </View>
 
@@ -115,7 +208,7 @@ export default function DriverScreen() {
       </View>
 
       <MapView style={styles.map} showsUserLocation={true} initialRegion={{ latitude: currentLoc?.latitude || 31.9454, longitude: currentLoc?.longitude || 35.9284, latitudeDelta: 0.02, longitudeDelta: 0.02 }}>
-        {students.map(s => s.latitude && <Marker key={s.id} coordinate={{ latitude: s.latitude, longitude: s.longitude }} title={s.name} pinColor="orange" />)}
+        {students.map(s => s.latitude && <Marker key={s.id} coordinate={{ latitude: s.latitude, longitude: s.longitude }} title={s.name} pinColor={s.status === 'present' ? 'green' : 'orange'} />)}
       </MapView>
 
       <View style={styles.studentListContainer}>
@@ -123,7 +216,12 @@ export default function DriverScreen() {
         <FlatList data={students} keyExtractor={item => item.id} renderItem={({ item }) => (
           <View style={styles.studentItem}>
             <TouchableOpacity style={styles.callBtn} onPress={() => callParent(item.parent_username)}><Text style={styles.callBtnText}>📞 اتصل</Text></TouchableOpacity>
-            <View style={styles.studentInfo}><Text style={styles.studentName}>{item.name}</Text><Text style={styles.studentSub}>{item.class}-{item.section}</Text></View>
+            <View style={styles.studentInfo}>
+              <Text style={styles.studentName}>{item.name}</Text>
+              <Text style={[styles.studentSub, item.status === 'present' && {color: '#10B981', fontWeight: 'bold'}]}>
+                {item.status === 'present' ? 'صعد الباص ✅' : `${item.class}-${item.section}`}
+              </Text>
+            </View>
           </View>
         )} />
       </View>
@@ -139,6 +237,13 @@ const styles = StyleSheet.create({
   driverName: { fontSize: 13, color: '#64748B' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  speedCard: { margin: 15, padding: 15, backgroundColor: '#1E293B', borderRadius: 15, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  speedInfo: { alignItems: 'center' },
+  speedValue: { fontSize: 32, fontWeight: 'bold', color: '#FFF' },
+  speedUnit: { fontSize: 12, color: '#94A3B8' },
+  speedLimit: { alignItems: 'flex-end' },
+  limitText: { fontSize: 14, color: '#94A3B8' },
+  speedWarning: { fontSize: 14, color: '#EF4444', fontWeight: 'bold', marginTop: 5 },
   actionRow: { flexDirection: 'row', paddingHorizontal: 15, marginTop: 10, alignItems: 'center' },
   emergencyBtn: { backgroundColor: '#EF4444', padding: 12, borderRadius: 12, marginRight: 10, elevation: 3 },
   emergencyBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
@@ -147,7 +252,7 @@ const styles = StyleSheet.create({
   statusText: { flex: 1, fontSize: 12, fontWeight: 'bold' },
   tripBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
   tripBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 11 },
-  map: { width: width, height: height * 0.3, marginTop: 10 },
+  map: { width: width, height: height * 0.25, marginTop: 10 },
   studentListContainer: { flex: 1, padding: 15 },
   listTitle: { fontSize: 15, fontWeight: 'bold', textAlign: 'right', marginBottom: 10 },
   studentItem: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 1 },
