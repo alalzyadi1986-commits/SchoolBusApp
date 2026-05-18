@@ -8,7 +8,6 @@ import {
   TouchableOpacity, 
   Alert, 
   ActivityIndicator,
-  ScrollView,
   Platform,
   SafeAreaView,
   StatusBar
@@ -152,22 +151,7 @@ export default function SuperAdminScreen({ navigation }) {
   };
 
   const handleChangeAdminPassword = () => {
-    Alert.prompt(
-      'تغيير كلمة سر المدير العام',
-      'أدخل كلمة السر الجديدة:',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'حفظ',
-          onPress: (newPass) => {
-            if (newPass) {
-              // هنا يمكن تحديث كلمة السر في Firebase إذا كان هناك مسار مخصص لها
-              Alert.alert('نجاح', 'سيتم تحديث كلمة السر');
-            }
-          }
-        }
-      ]
-    );
+    Alert.alert('تنبيه', 'هذه الميزة ستكون متاحة قريباً في التحديث القادم.');
   };
 
   const renderSchoolItem = ({ item, index }) => {
