@@ -193,12 +193,11 @@ export default function LoginScreen() {
               <View style={styles.inputWrapper}>
                 <TextInput 
                   style={styles.input}
-                  placeholder="أدخل اسم المستخدم أو البريد"
+                  placeholder="أدخل اسم المستخدم"
                   placeholderTextColor="#94A3B8"
                   value={username}
                   onChangeText={setUsername}
                   autoCapitalize="none"
-                  keyboardType="email-address"
                 />
               </View>
             </View>
@@ -237,10 +236,6 @@ export default function LoginScreen() {
                   {rememberMe && <Text style={styles.checkmark}>✓</Text>}
                 </View>
               </TouchableOpacity>
-              
-              <TouchableOpacity>
-                <Text style={styles.forgotPasswordText}>نسيت كلمة المرور؟</Text>
-              </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
@@ -257,10 +252,11 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.supportTitle}>تحتاج لمساعدة؟</Text>
-            <TouchableOpacity style={styles.contactBadge}>
-              <Text style={styles.contactText}>📞 الدعم الفني: 999999999</Text>
-            </TouchableOpacity>
+            <Text style={styles.supportTitle}>لطلب الاشتراك أو الدعم</Text>
+            <View style={styles.contactBadge}>
+              <Text style={styles.contactText}>📞 الهاتف: 999999</Text>
+              <Text style={[styles.contactText, { marginTop: 5 }]}>📧 البريد: 9999999</Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -278,7 +274,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: width * 0.6,
+    height: width * 0.5,
     backgroundColor: '#3B82F6',
     borderBottomLeftRadius: 60,
     borderBottomRightRadius: 60,
@@ -289,79 +285,79 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 40,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 30,
   },
   headerArea: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   logoCircle: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
     backgroundColor: '#FFF',
-    borderRadius: 50,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 10,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 10,
-    marginBottom: 20,
+    shadowRadius: 8,
+    marginBottom: 15,
   },
   logoEmoji: {
-    fontSize: 50,
+    fontSize: 40,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFF',
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 8,
+    marginTop: 5,
     textAlign: 'center',
     fontWeight: '500',
   },
   formCard: {
     backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: 20,
+    padding: 20,
     elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
-    shadowRadius: 20,
+    shadowRadius: 15,
   },
   welcomeText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1E293B',
-    marginBottom: 25,
+    marginBottom: 20,
     textAlign: 'center',
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 15,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'right',
   },
   inputWrapper: {
     backgroundColor: '#F1F5F9',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   input: {
-    padding: 15,
-    fontSize: 16,
+    padding: 12,
+    fontSize: 15,
     textAlign: 'right',
     color: '#1E293B',
   },
@@ -369,49 +365,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F1F5F9',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   passwordField: {
     flex: 1,
-    padding: 15,
-    fontSize: 16,
+    padding: 12,
+    fontSize: 15,
     textAlign: 'right',
     color: '#1E293B',
   },
   visibilityButton: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 12,
   },
   visibilityButtonText: {
-    fontSize: 18,
+    fontSize: 16,
   },
   optionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    marginBottom: 25,
-  },
-  forgotPasswordText: {
-    fontSize: 13,
-    color: '#3B82F6',
-    fontWeight: '600',
+    marginBottom: 20,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   checkboxLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     marginRight: 8,
   },
   customCheckbox: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     borderWidth: 2,
     borderColor: '#CBD5E1',
-    borderRadius: 6,
+    borderRadius: 5,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -421,19 +412,19 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   loginButton: {
     backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 10,
+    padding: 14,
     alignItems: 'center',
     shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
   },
   loginButtonDisabled: {
     backgroundColor: '#94A3B8',
@@ -441,26 +432,27 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   footer: {
-    marginTop: 30,
+    marginTop: 25,
     alignItems: 'center',
   },
   supportTitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#94A3B8',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   contactBadge: {
-    backgroundColor: '#E2E8F0',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 15,
+    alignItems: 'center',
   },
   contactText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#475569',
     fontWeight: '600',
   },
