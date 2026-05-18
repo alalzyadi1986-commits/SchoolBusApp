@@ -323,7 +323,31 @@ export default function SchoolScreen({ route, navigation }) {
                 <Text style={styles.cancelBtnText}>إلغاء التعديل والعودة للإضافة</Text>
               </TouchableOpacity>
             )}
+        {/* نموذج الإدارة */}
+        {activeTab === 'managers' && showManagerForm && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات المدير' : 'إضافة مدير جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            {renderInput('رقم الهاتف', 'phone', false, true)}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowManagerForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
           </View>
+        )}
+
+                  </View>
         )}
 
         {/* قسم البحث والفلترة */}
