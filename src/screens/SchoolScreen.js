@@ -201,15 +201,18 @@ export default function SchoolScreen({ route, navigation }) {
               <>
                 <Text style={styles.sectionLabel}>ربط المرافقة بالسائق:</Text>
                 <ScrollView horizontal style={styles.chipScroll}>
-                  {drivers.map(d => (
-                    <TouchableOpacity 
-                      key={d.id} 
-                      style={[styles.miniChip, formData.driver_id === d.username && styles.miniChipActive]}
-                      onPress={() => setFormData({ ...formData, driver_id: d.username === formData.driver_id ? null : d.username })}
-                    >
-                      <Text style={[styles.miniChipText, formData.driver_id === d.username && styles.miniChipTextActive]}>{d.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {drivers.map(d => {
+                    const driverKey = d.username || d.id;
+                    return (
+                      <TouchableOpacity 
+                        key={d.id} 
+                        style={[styles.miniChip, formData.driver_id === driverKey && styles.miniChipActive]}
+                        onPress={() => setFormData({ ...formData, driver_id: driverKey === formData.driver_id ? null : driverKey })}
+                      >
+                        <Text style={[styles.miniChipText, formData.driver_id === driverKey && styles.miniChipTextActive]}>{d.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
                 <Text style={styles.sectionLabel}>صلاحيات المرافقة:</Text>
                 {renderPermission('تسجيل الحضور والغياب', 'canMarkAttendance')}
@@ -236,11 +239,14 @@ export default function SchoolScreen({ route, navigation }) {
 
                 <Text style={styles.sectionLabel}>ربط بالسائق والمرافقة:</Text>
                 <ScrollView horizontal style={styles.chipScroll}>
-                  {drivers.map(d => (
-                    <TouchableOpacity key={d.id} style={[styles.miniChip, formData.driver_id === d.username && styles.miniChipActive]} onPress={() => setFormData({ ...formData, driver_id: d.username === formData.driver_id ? null : d.username })}>
-                      <Text style={[styles.miniChipText, formData.driver_id === d.username && styles.miniChipTextActive]}>سائق: {d.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {drivers.map(d => {
+                    const driverKey = d.username || d.id;
+                    return (
+                      <TouchableOpacity key={d.id} style={[styles.miniChip, formData.driver_id === driverKey && styles.miniChipActive]} onPress={() => setFormData({ ...formData, driver_id: driverKey === formData.driver_id ? null : driverKey })}>
+                        <Text style={[styles.miniChipText, formData.driver_id === driverKey && styles.miniChipTextActive]}>سائق: {d.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               </>
             )}
@@ -291,15 +297,18 @@ export default function SchoolScreen({ route, navigation }) {
                 <TouchableOpacity style={[styles.miniChip, selectedDriverReport === 'الكل' && styles.miniChipActive]} onPress={() => setSelectedDriverReport('الكل')}>
                   <Text style={[styles.miniChipText, selectedDriverReport === 'الكل' && styles.miniChipTextActive]}>الكل</Text>
                 </TouchableOpacity>
-                {drivers.map(d => (
-                  <TouchableOpacity 
-                    key={d.id} 
-                    style={[styles.miniChip, selectedDriverReport === d.username && styles.miniChipActive]} 
-                    onPress={() => setSelectedDriverReport(selectedDriverReport === d.username ? 'الكل' : d.username)}
-                  >
-                    <Text style={[styles.miniChipText, selectedDriverReport === d.username && styles.miniChipTextActive]}>{d.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                {drivers.map(d => {
+                  const driverKey = d.username || d.id;
+                  return (
+                    <TouchableOpacity 
+                      key={d.id} 
+                      style={[styles.miniChip, selectedDriverReport === driverKey && styles.miniChipActive]} 
+                      onPress={() => setSelectedDriverReport(selectedDriverReport === driverKey ? 'الكل' : driverKey)}
+                    >
+                      <Text style={[styles.miniChipText, selectedDriverReport === driverKey && styles.miniChipTextActive]}>{d.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             </View>
           )}
