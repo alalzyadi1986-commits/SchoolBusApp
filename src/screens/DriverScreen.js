@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -29,153 +29,97 @@ export default function DriverScreen() {
       if (data) {
         const list = Object.keys(data)
           .map(key => ({ id: key, ...data[key] }))
-          .filter(s => s.driver_id === user.username);
+          .filter(s => s.driver_id === user.username && s.status !== 'absent_today');
         setStudents(list);
-      } else {
-        setStudents([]);
-      }
+      } else { setStudents([]); }
       setLoading(false);
     });
 
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('خطأ', 'يجب السماح بالوصول للموقع لبث التتبع');
-        return;
+      if (status === 'granted') {
+        let loc = await Location.getCurrentPositionAsync({});
+        setCurrentLoc(loc.coords);
       }
-      let loc = await Location.getCurrentPositionAsync({});
-      setCurrentLoc(loc.coords);
     })();
 
-    return () => {
-      unsubscribeStudents();
-      stopTracking();
-    };
+    return () => { unsubscribeStudents(); stopTracking(); };
   }, [schoolId, user]);
 
   const startTrip = async () => {
     if (user?.permissions && !user.permissions.canStartTrip) {
-      Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية بدء الرحلة. يرجى مراجعة إدارة المدرسة.');
+      Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية بدء الرحلة');
       return;
     }
-
     setIsTripActive(true);
     locationSubscription.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, distanceInterval: 10 },
       (loc) => {
         setCurrentLoc(loc.coords);
         update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          updatedAt: new Date().toISOString(),
-          driverName: user.name,
-          busNumber: user.bus_number,
-          isActive: true
+          latitude: loc.coords.latitude, longitude: loc.coords.longitude,
+          updatedAt: new Date().toISOString(), driverName: user.name,
+          busNumber: user.bus_number, isActive: true
         });
       }
     );
   };
 
   const stopTracking = () => {
-    if (locationSubscription.current) {
-      locationSubscription.current.remove();
-      locationSubscription.current = null;
-    }
+    if (locationSubscription.current) { locationSubscription.current.remove(); locationSubscription.current = null; }
     if (schoolId && user?.username) {
-      update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
-        isActive: false,
-        updatedAt: new Date().toISOString()
-      });
+      update(ref(db, `schools/${schoolId}/bus/${user.username}`), { isActive: false, updatedAt: new Date().toISOString() });
     }
     setIsTripActive(false);
   };
 
-  const handleLogout = () => {
-    Alert.alert('تسجيل الخروج', 'هل تريد إنهاء الرحلة وتسجيل الخروج؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      { text: 'خروج', style: 'destructive', onPress: () => {
-          stopTracking();
-          navigation.replace('Login');
-        }
-      }
-    ]);
+  const callParent = async (parentUsername) => {
+    const parentRef = ref(db, `schools/${schoolId}/parents/${parentUsername}`);
+    onValue(parentRef, (snap) => {
+      const p = snap.val();
+      if (p?.phone) Linking.openURL(`tel:${p.phone}`);
+      else Alert.alert('خطأ', 'رقم ولي الأمر غير متوفر');
+    }, { onlyOnce: true });
   };
 
-  if (loading) {
-    return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
-  }
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>خروج</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => { stopTracking(); navigation.replace('Login'); }}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>لوحة السائق 🚌</Text>
-          <Text style={styles.driverName}>السائق: {user?.name} | باص رقم: {user?.bus_number}</Text>
+          <Text style={styles.driverName}>{user?.name} | باص {user?.bus_number}</Text>
         </View>
       </View>
 
       <View style={styles.statusCard}>
         <View style={[styles.statusIndicator, { backgroundColor: isTripActive ? '#10B981' : '#EF4444' }]} />
-        <Text style={styles.statusText}>{isTripActive ? 'الرحلة جارية - يتم بث موقعك الآن' : 'الرحلة متوقفة'}</Text>
-        <TouchableOpacity 
-          style={[styles.tripBtn, { backgroundColor: isTripActive ? '#EF4444' : '#10B981' }]} 
-          onPress={isTripActive ? stopTracking : startTrip}
-        >
-          <Text style={styles.tripBtnText}>{isTripActive ? 'إنهاء الرحلة' : 'بدء الرحلة'}</Text>
+        <Text style={styles.statusText}>{isTripActive ? 'الرحلة جارية...' : 'الرحلة متوقفة'}</Text>
+        <TouchableOpacity style={[styles.tripBtn, { backgroundColor: isTripActive ? '#EF4444' : '#10B981' }]} onPress={isTripActive ? stopTracking : startTrip}>
+          <Text style={styles.tripBtnText}>{isTripActive ? 'إنهاء' : 'بدء'}</Text>
         </TouchableOpacity>
       </View>
 
-      <MapView
-        style={styles.map}
-        initialRegion={{
-          latitude: currentLoc?.latitude || 31.9454,
-          longitude: currentLoc?.longitude || 35.9284,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02
-        }}
-        region={currentLoc ? {
-          latitude: currentLoc.latitude,
-          longitude: currentLoc.longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02
-        } : undefined}
-        showsUserLocation={true}
-      >
-        {students.map(s => (
-          s.latitude && s.longitude ? (
-            <Marker
-              key={s.id}
-              coordinate={{ latitude: s.latitude, longitude: s.longitude }}
-              title={s.name}
-              description={`الصف: ${s.class} | ولي الأمر: ${s.parent_username}`}
-              pinColor="orange"
-            />
-          ) : null
-        ))}
+      <MapView style={styles.map} showsUserLocation={true} initialRegion={{ latitude: currentLoc?.latitude || 31.9454, longitude: currentLoc?.longitude || 35.9284, latitudeDelta: 0.02, longitudeDelta: 0.02 }}>
+        {students.map(s => s.latitude && <Marker key={s.id} coordinate={{ latitude: s.latitude, longitude: s.longitude }} title={s.name} pinColor="orange" />)}
       </MapView>
 
       <View style={styles.studentListContainer}>
-        <Text style={styles.listTitle}>قائمة طلاب الرحلة ({students.length})</Text>
+        <Text style={styles.listTitle}>طلاب الرحلة ({students.length})</Text>
         <FlatList
           data={students}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <View style={styles.studentItem}>
+              <TouchableOpacity style={styles.callBtn} onPress={() => callParent(item.parent_username)}><Text style={styles.callBtnText}>📞 اتصل</Text></TouchableOpacity>
               <View style={styles.studentInfo}>
                 <Text style={styles.studentName}>{item.name}</Text>
-                <Text style={styles.studentSub}>{item.class} - {item.section}</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: item.status === 'present' ? '#DCFCE7' : '#F1F5F9' }]}>
-                <Text style={[styles.statusBadgeText, { color: item.status === 'present' ? '#166534' : '#64748B' }]}>
-                  {item.status === 'present' ? 'صعد' : 'لم يصعد'}
-                </Text>
+                <Text style={styles.studentSub}>{item.class}-{item.section}</Text>
               </View>
             </View>
           )}
-          ListEmptyComponent={<Text style={styles.emptyText}>لا يوجد طلاب مرتبطين بك حالياً</Text>}
         />
       </View>
     </SafeAreaView>
@@ -187,22 +131,21 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  driverName: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+  driverName: { fontSize: 13, color: '#64748B' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
   statusCard: { margin: 15, padding: 15, backgroundColor: '#FFF', borderRadius: 15, flexDirection: 'row', alignItems: 'center', elevation: 2 },
-  statusIndicator: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
-  statusText: { flex: 1, fontSize: 13, color: '#1E293B', fontWeight: '600' },
-  tripBtn: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 10 },
-  tripBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
-  map: { width: width, height: height * 0.35 },
+  statusIndicator: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  statusText: { flex: 1, fontSize: 13, fontWeight: 'bold' },
+  tripBtn: { paddingVertical: 6, paddingHorizontal: 15, borderRadius: 8 },
+  tripBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
+  map: { width: width, height: height * 0.3 },
   studentListContainer: { flex: 1, padding: 15 },
-  listTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 10, textAlign: 'right' },
+  listTitle: { fontSize: 15, fontWeight: 'bold', textAlign: 'right', marginBottom: 10 },
   studentItem: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 1 },
   studentInfo: { alignItems: 'flex-end' },
-  studentName: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
-  studentSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusBadgeText: { fontSize: 11, fontWeight: 'bold' },
-  emptyText: { textAlign: 'center', color: '#64748B', marginTop: 20 }
+  studentName: { fontSize: 14, fontWeight: 'bold' },
+  studentSub: { fontSize: 11, color: '#64748B' },
+  callBtn: { backgroundColor: '#3B82F6', padding: 6, borderRadius: 6 },
+  callBtnText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' }
 });
