@@ -292,7 +292,11 @@ export default function SchoolScreen({ route, navigation }) {
                   <Text style={[styles.miniChipText, selectedDriverReport === 'الكل' && styles.miniChipTextActive]}>الكل</Text>
                 </TouchableOpacity>
                 {drivers.map(d => (
-                  <TouchableOpacity key={d.id} style={[styles.miniChip, selectedDriverReport === d.username && styles.miniChipActive]} onPress={() => setSelectedDriverReport(d.username)}>
+                  <TouchableOpacity 
+                    key={d.id} 
+                    style={[styles.miniChip, selectedDriverReport === d.username && styles.miniChipActive]} 
+                    onPress={() => setSelectedDriverReport(selectedDriverReport === d.username ? 'الكل' : d.username)}
+                  >
                     <Text style={[styles.miniChipText, selectedDriverReport === d.username && styles.miniChipTextActive]}>{d.name}</Text>
                   </TouchableOpacity>
                 ))}
@@ -362,9 +366,9 @@ const styles = StyleSheet.create({
   logoutText: { color: '#EF4444', fontWeight: 'bold' },
   tabBar: { backgroundColor: '#FFF', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   tabGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', paddingHorizontal: 10, justifyContent: 'space-around' },
-  tabGridItem: { width: '48%', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 12, marginVertical: 6, backgroundColor: '#F8FAFC', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  tabGridItem: { width: '23%', paddingVertical: 10, paddingHorizontal: 5, borderRadius: 10, marginVertical: 4, backgroundColor: '#F8FAFC', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
   activeTabGrid: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  tabGridText: { color: '#64748B', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
+  tabGridText: { color: '#64748B', fontWeight: 'bold', fontSize: 11, textAlign: 'center' },
   activeTabGridText: { color: '#FFF' },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginHorizontal: 5, backgroundColor: '#F8FAFC' },
   activeTab: { backgroundColor: '#3B82F6' },
