@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, 
   Alert, ActivityIndicator, ScrollView, StatusBar, Modal, Dimensions
@@ -26,31 +26,35 @@ export default function SchoolScreen() {
   const [parentsList, setParentsList] = useState([]);
   const [studentsList, setStudentsList] = useState([]);
 
+  // حالات البحث والفلترة
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilterClass, setSelectedFilterClass] = useState('الكل');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+
   // حالات النوافذ المنبثقة (Modals)
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState(''); // 'driver', 'staff', 'parent', 'student'
   const [editingId, setEditingId] = useState(null);
 
-  // حقول الإدخال المشتركة
+  // حقول الإدخال
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-
-  // حقول خاصة
   const [busNumber, setBusNumber] = useState('');
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [studentClass, setStudentClass] = useState('');
   const [studentSection, setStudentSection] = useState('');
   const [selectedParentId, setSelectedParentId] = useState('');
   const [selectedDriverForStudent, setSelectedDriverForStudent] = useState('');
+  const [selectedStaffForStudent, setSelectedStaffForStudent] = useState('');
   
   const [permissions, setPermissions] = useState({
     viewLocation: true,
     markAttendance: true,
     contactParents: false,
     editStudents: false,
-    addStudentsAndLocation: false // الصلاحية الجديدة
+    addStudentsAndLocation: false
   });
 
   useEffect(() => {
@@ -92,7 +96,7 @@ export default function SchoolScreen() {
     setEditingId(null);
     setUsername(''); setPassword(''); setName(''); setPhone('');
     setBusNumber(''); setSelectedDriverId(''); setStudentClass(''); setStudentSection('');
-    setSelectedParentId(''); setSelectedDriverForStudent('');
+    setSelectedParentId(''); setSelectedDriverForStudent(''); setSelectedStaffForStudent('');
     setPermissions({
       viewLocation: true, markAttendance: true, contactParents: false, 
       editStudents: false, addStudentsAndLocation: false
@@ -119,20 +123,26 @@ export default function SchoolScreen() {
         setStudentSection(item.section || '');
         setSelectedParentId(item.parent_username || '');
         setSelectedDriverForStudent(item.driver_id || '');
+        setSelectedStaffForStudent(item.staff_id || '');
       }
     }
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!name || !password || (modalType !== 'student' && !username)) {
+    if (!name || (modalType !== 'student' && (!username || !password))) {
       Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية');
       return;
     }
 
     try {
+      setLoading(true);
       let data = { name, password, phone, role: modalType };
-      let path = `schools/${schoolId}/${modalType}s/${username.trim()}`;
+      
+      // إذا تم تغيير اسم المستخدم، يجب حذف القديم وإنشاء جديد لضمان استقرار Firebase
+      if (editingId && modalType !== 'student' && editingId !== username) {
+        await remove(ref(db, `schools/${schoolId}/${modalType}s/${editingId}`));
+      }
 
       if (modalType === 'driver') data.bus_number = busNumber;
       if (modalType === 'staff') {
@@ -140,34 +150,33 @@ export default function SchoolScreen() {
         data.permissions = permissions;
       }
       if (modalType === 'parent') data.family_name = name;
+      
       if (modalType === 'student') {
-        data = { name, class: studentClass, section: studentSection, parent_username: selectedParentId, driver_id: selectedDriverForStudent };
+        const studentData = { 
+          name, 
+          class: studentClass, 
+          section: studentSection, 
+          parent_username: selectedParentId, 
+          driver_id: selectedDriverForStudent,
+          staff_id: selectedStaffForStudent
+        };
         if (editingId) {
-          await update(ref(db, `schools/${schoolId}/students/${editingId}`), data);
+          await update(ref(db, `schools/${schoolId}/students/${editingId}`), studentData);
         } else {
-          await push(ref(db, `schools/${schoolId}/students`), data);
+          await push(ref(db, `schools/${schoolId}/students`), studentData);
         }
       } else {
-        await set(ref(db, path), data);
+        await set(ref(db, `schools/${schoolId}/${modalType}s/${username.trim()}`), data);
       }
 
       Alert.alert('نجاح', 'تم حفظ البيانات بنجاح');
       setShowModal(false);
-    } catch (e) { Alert.alert('خطأ', 'فشلت العملية'); }
+    } catch (e) { 
+      Alert.alert('خطأ', 'فشلت العملية'); 
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const renderStudentItem = ({ item }) => (
-    <View style={styles.dataRow}>
-      <View style={styles.rowActions}>
-        <TouchableOpacity onPress={() => openModal('student', item)}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDelete(`students/${item.id}`, 'الطالب')}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
-      </View>
-      <View style={styles.rowInfo}>
-        <Text style={styles.rowName}>{item.name}</Text>
-        <Text style={styles.rowSub}>{item.class} - {item.section}</Text>
-      </View>
-    </View>
-  );
 
   const handleDelete = (path, type) => {
     if (!checkAccess()) return;
@@ -180,8 +189,24 @@ export default function SchoolScreen() {
     ]);
   };
 
-  // تجميع الطلاب حسب الصف والشعبة
-  const groupedStudents = studentsList.reduce((acc, student) => {
+  // استخراج قائمة الصفوف الفريدة للفلترة
+  const uniqueClasses = useMemo(() => {
+    const classes = studentsList.map(s => `${s.class} - ${s.section}`);
+    return ['الكل', ...new Set(classes)];
+  }, [studentsList]);
+
+  // فلترة الطلاب بناءً على البحث والصف المختار
+  const filteredStudents = useMemo(() => {
+    return studentsList.filter(student => {
+      const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const classKey = `${student.class} - ${student.section}`;
+      const matchesClass = selectedFilterClass === 'الكل' || classKey === selectedFilterClass;
+      return matchesSearch && matchesClass;
+    });
+  }, [studentsList, searchQuery, selectedFilterClass]);
+
+  // تجميع الطلاب المفلترين حسب الصف والشعبة للعرض
+  const groupedStudents = filteredStudents.reduce((acc, student) => {
     const key = `${student.class || 'بدون صف'} - ${student.section || 'بدون شعبة'}`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(student);
@@ -214,6 +239,40 @@ export default function SchoolScreen() {
       </View>
 
       <View style={styles.content}>
+        {activeTab === 'students' && (
+          <View style={styles.searchFilterContainer}>
+            <TextInput 
+              style={styles.searchInput} 
+              placeholder="ابحث عن اسم الطالب..." 
+              value={searchQuery} 
+              onChangeText={setSearchQuery}
+              textAlign="right"
+            />
+            <TouchableOpacity 
+              style={styles.filterDropdown} 
+              onPress={() => setShowFilterDropdown(!showFilterDropdown)}
+            >
+              <Text style={styles.filterText}>{selectedFilterClass} ▼</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {showFilterDropdown && activeTab === 'students' && (
+          <View style={styles.dropdownMenu}>
+            <ScrollView style={{maxHeight: 200}}>
+              {uniqueClasses.map(cls => (
+                <TouchableOpacity 
+                  key={cls} 
+                  style={styles.dropdownItem} 
+                  onPress={() => { setSelectedFilterClass(cls); setShowFilterDropdown(false); }}
+                >
+                  <Text style={styles.dropdownItemText}>{cls}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         <TouchableOpacity style={styles.mainAddBtn} onPress={() => openModal(activeTab.slice(0, -1))}>
           <Text style={styles.mainAddBtnText}>➕ إضافة {activeTab === 'drivers' ? 'سائق' : activeTab === 'staff' ? 'مرافق' : activeTab === 'parents' ? 'حساب عائلة' : 'طالب'}</Text>
         </TouchableOpacity>
@@ -258,18 +317,23 @@ export default function SchoolScreen() {
         )}
       </View>
 
-      {/* Modal الإضافة والتعديل */}
       <Modal visible={showModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingId ? 'تعديل البيانات' : 'إضافة جديد'}</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {modalType !== 'student' && (
-                <TextInput style={[styles.input, editingId && styles.disabledInput]} placeholder="اسم المستخدم" value={username} onChangeText={setUsername} editable={!editingId} />
+                <TextInput style={styles.input} placeholder="اسم المستخدم" value={username} onChangeText={setUsername} autoCapitalize="none" />
               )}
               <TextInput style={styles.input} placeholder={modalType === 'parent' ? 'اسم العائلة' : 'الاسم الكامل'} value={name} onChangeText={setName} />
-              <TextInput style={styles.input} placeholder="كلمة المرور" value={password} onChangeText={setPassword} />
-              <TextInput style={styles.input} placeholder="رقم الهاتف" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              
+              {modalType !== 'student' && (
+                <TextInput style={styles.input} placeholder="كلمة المرور" value={password} onChangeText={setPassword} />
+              )}
+              
+              {modalType !== 'student' && (
+                <TextInput style={styles.input} placeholder="رقم الهاتف" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              )}
 
               {modalType === 'driver' && (
                 <TextInput style={styles.input} placeholder="رقم الباص" value={busNumber} onChangeText={setBusNumber} />
@@ -279,18 +343,11 @@ export default function SchoolScreen() {
                 <View>
                   <Text style={styles.subTitle}>ربط مع سائق:</Text>
                   <ScrollView horizontal style={styles.horizontalSelect}>
-                    <TouchableOpacity 
-                      style={[styles.selectItem, selectedDriverId === '' && styles.selectedItem]} 
-                      onPress={() => setSelectedDriverId('')}
-                    >
+                    <TouchableOpacity style={[styles.selectItem, selectedDriverId === '' && styles.selectedItem]} onPress={() => setSelectedDriverId('')}>
                       <Text style={[styles.selectText, selectedDriverId === '' && styles.selectedText]}>بدون ربط</Text>
                     </TouchableOpacity>
                     {driversList.map(d => (
-                      <TouchableOpacity 
-                        key={d.username} 
-                        style={[styles.selectItem, selectedDriverId === d.username && styles.selectedItem]} 
-                        onPress={() => setSelectedDriverId(d.username)}
-                      >
+                      <TouchableOpacity key={d.username} style={[styles.selectItem, selectedDriverId === d.username && styles.selectedItem]} onPress={() => setSelectedDriverId(d.username)}>
                         <Text style={[styles.selectText, selectedDriverId === d.username && styles.selectedText]}>{d.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -306,19 +363,47 @@ export default function SchoolScreen() {
                 <View>
                   <TextInput style={styles.input} placeholder="الصف (مثلاً: الأول)" value={studentClass} onChangeText={setStudentClass} />
                   <TextInput style={styles.input} placeholder="الشعبة (مثلاً: أ)" value={studentSection} onChangeText={setStudentSection} />
-                  <Text style={styles.subTitle}>اختر ولي الأمر:</Text>
+                  
+                  <Text style={styles.subTitle}>ربط ولي الأمر:</Text>
                   <ScrollView horizontal style={styles.horizontalSelect}>
+                    <TouchableOpacity style={[styles.selectItem, selectedParentId === '' && styles.selectedItem]} onPress={() => setSelectedParentId('')}>
+                      <Text style={[styles.selectText, selectedParentId === '' && styles.selectedText]}>فك الارتباط</Text>
+                    </TouchableOpacity>
                     {parentsList.map(p => (
                       <TouchableOpacity key={p.username} style={[styles.selectItem, selectedParentId === p.username && styles.selectedItem]} onPress={() => setSelectedParentId(p.username)}>
                         <Text style={[styles.selectText, selectedParentId === p.username && styles.selectedText]}>{p.family_name}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
+
+                  <Text style={styles.subTitle}>ربط بالسائق:</Text>
+                  <ScrollView horizontal style={styles.horizontalSelect}>
+                    <TouchableOpacity style={[styles.selectItem, selectedDriverForStudent === '' && styles.selectedItem]} onPress={() => setSelectedDriverForStudent('')}>
+                      <Text style={[styles.selectText, selectedDriverForStudent === '' && styles.selectedText]}>بدون سائق</Text>
+                    </TouchableOpacity>
+                    {driversList.map(d => (
+                      <TouchableOpacity key={d.username} style={[styles.selectItem, selectedDriverForStudent === d.username && styles.selectedItem]} onPress={() => setSelectedDriverForStudent(d.username)}>
+                        <Text style={[styles.selectText, selectedDriverForStudent === d.username && styles.selectedText]}>{d.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  <Text style={styles.subTitle}>ربط بالمرافقة:</Text>
+                  <ScrollView horizontal style={styles.horizontalSelect}>
+                    <TouchableOpacity style={[styles.selectItem, selectedStaffForStudent === '' && styles.selectedItem]} onPress={() => setSelectedStaffForStudent('')}>
+                      <Text style={[styles.selectText, selectedStaffForStudent === '' && styles.selectedText]}>بدون مرافقة</Text>
+                    </TouchableOpacity>
+                    {staffList.map(s => (
+                      <TouchableOpacity key={s.username} style={[styles.selectItem, selectedStaffForStudent === s.username && styles.selectedItem]} onPress={() => setSelectedStaffForStudent(s.username)}>
+                        <Text style={[styles.selectText, selectedStaffForStudent === s.username && styles.selectedText]}>{s.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>حفظ البيانات</Text>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
+                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>حفظ البيانات</Text>}
               </TouchableOpacity>
               <TouchableOpacity style={styles.closeBtn} onPress={() => setShowModal(false)}>
                 <Text style={styles.closeBtnText}>إلغاء</Text>
@@ -353,6 +438,13 @@ const styles = StyleSheet.create({
   tabText: { color: '#64748B', fontSize: 12 },
   activeTabText: { color: '#3B82F6', fontWeight: 'bold' },
   content: { flex: 1, padding: 15 },
+  searchFilterContainer: { flexDirection: 'row-reverse', marginBottom: 15, alignItems: 'center' },
+  searchInput: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginLeft: 10 },
+  filterDropdown: { backgroundColor: '#3B82F6', padding: 10, borderRadius: 10, minWidth: 100, alignItems: 'center' },
+  filterText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
+  dropdownMenu: { backgroundColor: '#FFF', borderRadius: 10, elevation: 5, position: 'absolute', top: 55, right: 15, zIndex: 1000, width: 150, borderWidth: 1, borderColor: '#E2E8F0' },
+  dropdownItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dropdownItemText: { textAlign: 'right', fontSize: 13, color: '#1E293B' },
   mainAddBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 12, alignItems: 'center', marginBottom: 15, elevation: 2 },
   mainAddBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
   dataRow: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 1 },
@@ -368,7 +460,6 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 20, maxHeight: '90%' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
   input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 10, marginBottom: 12, textAlign: 'right' },
-  disabledInput: { backgroundColor: '#E2E8F0', color: '#94A3B8' },
   subTitle: { fontSize: 14, fontWeight: 'bold', marginVertical: 10, textAlign: 'right' },
   horizontalSelect: { flexDirection: 'row-reverse', marginBottom: 15 },
   selectItem: { paddingHorizontal: 15, paddingVertical: 8, backgroundColor: '#F1F5F9', borderRadius: 20, marginLeft: 10 },
