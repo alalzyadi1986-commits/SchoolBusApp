@@ -184,7 +184,254 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      {/* أزرار الإضافة السريعة */}
+      {activeTab === 'drivers' && !showDriverForm && (
+        <View style={styles.addButtonContainer}>
+          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowDriverForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addDriverBtnText}>+ إضافة سائق جديد</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {activeTab === 'staff' && !showStaffForm && (
+        <View style={styles.addButtonContainer}>
+          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowStaffForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addDriverBtnText}>+ إضافة مرافق جديد</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {activeTab === 'parents' && !showParentForm && (
+        <View style={styles.addButtonContainer}>
+          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowParentForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addDriverBtnText}>+ إضافة ولي أمر جديد</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {activeTab === 'students' && !showStudentForm && (
+        <View style={styles.addButtonContainer}>
+          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowStudentForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addDriverBtnText}>+ إضافة طالب جديد</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {activeTab === 'managers' && !showManagerForm && (
+        <View style={styles.addButtonContainer}>
+          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowManagerForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addDriverBtnText}>+ إضافة مدير جديد</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ScrollView style={styles.content} scrollEventThrottle={16} removeClippedSubviews={true}>
+        {/* نموذج السائقين */}
+        {activeTab === 'drivers' && showDriverForm && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات السائق' : 'إضافة سائق جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            {renderInput('رقم الهاتف', 'phone', false, true)}
+            {renderInput('رقم الباص', 'bus_number')}
+            
+            {/* قائمة السرعة */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>السرعة القصوى المسموحة (كم/س):</Text>
+              <TouchableOpacity style={styles.speedPickerBtn} onPress={() => setShowSpeedPicker(true)}>
+                <Text style={styles.speedPickerText}>{formData.max_speed ? (formData.max_speed === 'بدون تحديد' ? 'بدون تحديد' : `${formData.max_speed} كم/س`) : 'اختر السرعة'}</Text>
+                <Text style={styles.speedPickerArrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal لاختيار السرعة */}
+            {showSpeedPicker && (
+              <View style={styles.speedPickerModal}>
+                <Text style={styles.speedPickerTitle}>اختر السرعة القصوى:</Text>
+                <ScrollView style={styles.speedPickerList} nestedScrollEnabled={true}>
+                  {speedOptions.map((speed, idx) => (
+                    <TouchableOpacity 
+                      key={idx} 
+                      style={[styles.speedOption, formData.max_speed === speed && styles.speedOptionActive]}
+                      onPress={() => { setFormData({ ...formData, max_speed: speed }); setShowSpeedPicker(false); if (speed === 'بدون تحديد') setEnableSpeedAlert(false); else setEnableSpeedAlert(true); }}
+                    >
+                      <Text style={[styles.speedOptionText, formData.max_speed === speed && styles.speedOptionTextActive]}>{speed === 'بدون تحديد' ? 'بدون تحديد' : `${speed} كم/س`}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity style={styles.speedPickerClose} onPress={() => setShowSpeedPicker(false)}>
+                  <Text style={styles.speedPickerCloseText}>إغلاق</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* مربع التنبيه عند تجاوز السرعة */}
+            {formData.max_speed && formData.max_speed !== 'بدون تحديد' && (
+              <TouchableOpacity 
+                style={styles.checkboxContainer} 
+                onPress={() => setEnableSpeedAlert(!enableSpeedAlert)}
+              >
+                <View style={[styles.checkbox, enableSpeedAlert && styles.checkboxChecked]} />
+                <Text style={styles.checkboxLabel}>إرسال تنبيه عند تجاوز السرعة</Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={styles.sectionLabel}>صلاحيات السائق:</Text>
+            {renderPermission('بدء الرحلة وبث الموقع', 'canStartTrip')}
+            {renderPermission('رؤية موقع الطلاب', 'canViewStudents')}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowDriverForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* نموذج المرافقين */}
+        {activeTab === 'staff' && showStaffForm && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات المرافق' : 'إضافة مرافق جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            {renderInput('رقم الهاتف', 'phone', false, true)}
+            
+            <Text style={styles.sectionLabel}>ربط المرافقة بالسائق:</Text>
+            <ScrollView horizontal style={styles.chipScroll}>
+              {drivers.map(d => (
+                <TouchableOpacity 
+                  key={d.id} 
+                  style={[styles.miniChip, formData.driver_id === d.username && styles.miniChipActive]}
+                  onPress={() => setFormData({ ...formData, driver_id: d.username === formData.driver_id ? null : d.username })}
+                >
+                  <Text style={[styles.miniChipText, formData.driver_id === d.username && styles.miniChipTextActive]}>{d.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <Text style={styles.sectionLabel}>صلاحيات المرافقة:</Text>
+            {renderPermission('تسجيل الحضور والغياب', 'canMarkAttendance')}
+            {renderPermission('إضافة طلاب ومواقع', 'canAddStudents')}
+            {renderPermission('رؤية موقع الباص', 'canViewBus')}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowStaffForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* نموذج أولياء الأمور */}
+        {activeTab === 'parents' && showParentForm && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات ولي الأمر' : 'إضافة ولي أمر جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            {renderInput('رقم الهاتف', 'phone', false, true)}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowParentForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* نموذج الطلاب */}
+        {activeTab === 'students' && showStudentForm && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginLeft: 5 }}>{renderInput('الصف', 'class')}</View>
+              <View style={{ flex: 1 }}>{renderInput('الشعبة', 'section')}</View>
+            </View>
+            
+            <Text style={styles.sectionLabel}>ربط بولي الأمر:</Text>
+            <ScrollView horizontal style={styles.chipScroll}>
+              {parents.map(p => (
+                <TouchableOpacity key={p.id} style={[styles.miniChip, formData.parent_username === p.username && styles.miniChipActive]} onPress={() => setFormData({ ...formData, parent_username: p.username === formData.parent_username ? null : p.username })}>
+                  <Text style={[styles.miniChipText, formData.parent_username === p.username && styles.miniChipTextActive]}>{p.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.sectionLabel}>ربط بالسائق:</Text>
+            <ScrollView horizontal style={styles.chipScroll}>
+              {drivers.map(d => (
+                <TouchableOpacity key={d.id} style={[styles.miniChip, formData.driver_id === d.username && styles.miniChipActive]} onPress={() => setFormData({ ...formData, driver_id: d.username === formData.driver_id ? null : d.username })}>
+                  <Text style={[styles.miniChipText, formData.driver_id === d.username && styles.miniChipTextActive]}>سائق: {d.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowStudentForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* نموذج الإدارة */}
+        {activeTab === 'managers' && showManagerForm && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل بيانات المدير' : 'إضافة مدير جديد'}</Text>
+            
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة المرور', 'password', true)}
+            {renderInput('رقم الهاتف', 'phone', false, true)}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => handleAction('save')}>
+              <Text style={styles.saveBtnText}>{editingId ? 'تحديث البيانات' : 'حفظ البيانات'}</Text>
+            </TouchableOpacity>
+            {editingId && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setEditingId(null); setFormData({}); }}>
+                <Text style={styles.cancelBtnText}>إلغاء التعديل</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowManagerForm(false); setFormData({}); setEditingId(null); }}>
+              <Text style={styles.cancelBtnText}>إغلاق النموذج</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* قسم الإضافة الثابت في الأعلى */}
         {['drivers', 'staff', 'parents', 'students', 'managers'].includes(activeTab) && (
           <View style={styles.formCard}>
