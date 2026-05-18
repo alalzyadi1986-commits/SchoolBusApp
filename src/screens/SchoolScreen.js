@@ -155,9 +155,9 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* التبويبات */}
+      {/* التبويبات - شبكة ثابتة */}
       <View style={styles.tabBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row-reverse' }}>
+        <View style={styles.tabGrid}>
           {[
             { id: 'drivers', label: 'السائقين' },
             { id: 'staff', label: 'المرافقين' },
@@ -166,11 +166,11 @@ export default function SchoolScreen({ route, navigation }) {
             { id: 'reports', label: 'التقارير' },
             { id: 'emergencies', label: 'الطوارئ' }
           ].map(tab => (
-            <TouchableOpacity key={tab.id} style={[styles.tab, activeTab === tab.id && styles.activeTab]} onPress={() => { setActiveTab(tab.id); setFormData({}); setEditingId(null); }}>
-              <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>{tab.label}</Text>
+            <TouchableOpacity key={tab.id} style={[styles.tabGridItem, activeTab === tab.id && styles.activeTabGrid]} onPress={() => { setActiveTab(tab.id); setFormData({}); setEditingId(null); }}>
+              <Text style={[styles.tabGridText, activeTab === tab.id && styles.activeTabGridText]}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -356,7 +356,12 @@ const styles = StyleSheet.create({
   expiryText: { fontSize: 12, marginTop: 2 },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold' },
-  tabBar: { backgroundColor: '#FFF', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  tabBar: { backgroundColor: '#FFF', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  tabGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', paddingHorizontal: 10, justifyContent: 'space-around' },
+  tabGridItem: { width: '48%', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 12, marginVertical: 6, backgroundColor: '#F8FAFC', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  activeTabGrid: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  tabGridText: { color: '#64748B', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
+  activeTabGridText: { color: '#FFF' },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginHorizontal: 5, backgroundColor: '#F8FAFC' },
   activeTab: { backgroundColor: '#3B82F6' },
   tabText: { color: '#64748B', fontWeight: 'bold' },
