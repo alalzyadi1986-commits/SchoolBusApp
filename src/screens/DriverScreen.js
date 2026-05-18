@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, ActivityIndicator } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ref, set, onValue, update } from "firebase/database";
+import { ref, onValue, update } from "firebase/database";
 import { db } from '../firebaseConfig';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,7 +23,6 @@ export default function DriverScreen() {
   useEffect(() => {
     if (!schoolId || !user?.username) return;
 
-    // جلب الطلاب المرتبطين بهذا السائق فقط
     const studentsRef = ref(db, `schools/${schoolId}/students`);
     const unsubscribeStudents = onValue(studentsRef, (snapshot) => {
       const data = snapshot.val();
@@ -38,7 +37,6 @@ export default function DriverScreen() {
       setLoading(false);
     });
 
-    // طلب صلاحيات الموقع
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -56,17 +54,22 @@ export default function DriverScreen() {
   }, [schoolId, user]);
 
   const startTrip = async () => {
+    if (user?.permissions && !user.permissions.canStartTrip) {
+      Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية بدء الرحلة. يرجى مراجعة إدارة المدرسة.');
+      return;
+    }
+
     setIsTripActive(true);
     locationSubscription.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, distanceInterval: 10 },
       (loc) => {
         setCurrentLoc(loc.coords);
-        // تحديث موقع الباص في Firebase
         update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
           updatedAt: new Date().toISOString(),
           driverName: user.name,
+          busNumber: user.bus_number,
           isActive: true
         });
       }
@@ -110,7 +113,7 @@ export default function DriverScreen() {
         </TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>لوحة السائق 🚌</Text>
-          <Text style={styles.driverName}>{user?.name}</Text>
+          <Text style={styles.driverName}>السائق: {user?.name} | باص رقم: {user?.bus_number}</Text>
         </View>
       </View>
 
@@ -184,7 +187,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  driverName: { fontSize: 14, color: '#64748B' },
+  driverName: { fontSize: 13, color: '#64748B', fontWeight: '600' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
   statusCard: { margin: 15, padding: 15, backgroundColor: '#FFF', borderRadius: 15, flexDirection: 'row', alignItems: 'center', elevation: 2 },
