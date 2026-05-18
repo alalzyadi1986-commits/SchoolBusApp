@@ -182,7 +182,7 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} scrollEventThrottle={16} removeClippedSubviews={true} maxToRenderPerBatch={10} updateCellsBatchingPeriod={50}>
         {/* زر إضافة سائق للسائقين فقط */}
         {activeTab === 'drivers' && !showDriverForm && (
           <View style={styles.addButtonContainer}>
