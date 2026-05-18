@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert } from 'react-native';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ref, onValue } from "firebase/database";
 import { db } from '../firebaseConfig';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { width, height } = Dimensions.get('window');
 
 export default function ParentScreen() {
   const route = useRoute();
@@ -15,47 +18,66 @@ export default function ParentScreen() {
   const [myLocation, setMyLocation] = useState(null);
   const [alertMinutes, setAlertMinutes] = useState(2);
   const [notified, setNotified] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [studentInfo, setStudentInfo] = useState(null);
 
   useEffect(() => {
-    if (!schoolId) return;
+    if (!schoolId || !user?.username) return;
 
-    // جلب موقع الأهل
-    Location.requestForegroundPermissionsAsync().then(({ status }) => {
-      if (status !== 'granted') return;
-      Location.getCurrentPositionAsync({}).then(loc => {
+    // جلب بيانات الطالب المرتبط بولي الأمر هذا
+    const studentsRef = ref(db, `schools/${schoolId}/students`);
+    onValue(studentsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const myStudent = Object.values(data).find(s => s.parent_username === user.username);
+        if (myStudent) {
+          setStudentInfo(myStudent);
+          
+          // تتبع باص الطالب المحدد فقط
+          if (myStudent.driver_id) {
+            const busRef = ref(db, `schools/${schoolId}/bus/${myStudent.driver_id}`);
+            onValue(busRef, (busSnap) => {
+              const busData = busSnap.val();
+              if (busData && busData.isActive) {
+                setBusLocation({
+                  latitude: busData.latitude,
+                  longitude: busData.longitude
+                });
+                
+                // حساب المسافة والتنبيه
+                if (myLocation) {
+                  const dist = calculateDistance(
+                    busData.latitude, busData.longitude,
+                    myLocation.latitude, myLocation.longitude
+                  );
+                  // افتراض سرعة الباص 30 كم/س (0.5 كم/دقيقة)
+                  if (dist < alertMinutes * 0.5 && !notified) {
+                    Alert.alert("تنبيه 🚌", `باص ${myStudent.name} يقترب! سيصل خلال ${alertMinutes} دقائق تقريباً`);
+                    setNotified(true);
+                  }
+                }
+              } else {
+                setBusLocation(null);
+              }
+            });
+          }
+        }
+      }
+      setLoading(false);
+    });
+
+    // جلب موقع ولي الأمر (المنزل)
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        let loc = await Location.getCurrentPositionAsync({});
         setMyLocation({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude
         });
-      });
-    });
-
-    // جلب موقع باص المدرسة فقط باستخدام schoolId
-    const busRef = ref(db, `schools/${schoolId}/bus`);
-    const unsubscribeBus = onValue(busRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setBusLocation({
-          latitude: data.latitude,
-          longitude: data.longitude
-        });
-
-        if (myLocation) {
-          const dist = calculateDistance(
-            data.latitude, data.longitude,
-            myLocation.latitude, myLocation.longitude
-          );
-          // 0.5 كم لكل دقيقة تقريباً
-          if (dist < alertMinutes * 0.5 && !notified) {
-            Alert.alert("تنبيه 🚌", `الباص يقترب! سيصل خلال ${alertMinutes} دقائق تقريباً`);
-            setNotified(true);
-          }
-        }
       }
-    });
-
-    return () => unsubscribeBus();
-  }, [schoolId, myLocation, alertMinutes, notified]);
+    })();
+  }, [schoolId, user, myLocation, alertMinutes, notified]);
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -71,40 +93,56 @@ export default function ParentScreen() {
     navigation.replace('Login');
   };
 
-  const region = myLocation ? {
-    ...myLocation,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05
-  } : {
-    latitude: 31.9454,
-    longitude: 35.9284,
-    latitudeDelta: 0.1,
-    longitudeDelta: 0.1
-  };
+  if (loading) {
+    return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>تتبع الباص 🚌</Text>
-      <Text style={styles.parentName}>ولي الأمر: {user?.family_name || user?.username}</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>خروج</Text>
+        </TouchableOpacity>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.title}>تتبع الباص 🚌</Text>
+          <Text style={styles.parentName}>عائلة {user?.family_name}</Text>
+        </View>
+      </View>
 
-      <View style={styles.settings}>
-        <Text style={styles.settingsLabel}>نبهني قبل وصول الباص بـ:</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-          {[1, 2, 5].map(m => (
-            <TouchableOpacity
-              key={m}
+      <View style={styles.infoCard}>
+        <Text style={styles.studentLabel}>الطالب: <Text style={styles.studentValue}>{studentInfo?.name || 'غير مسجل'}</Text></Text>
+        <Text style={styles.studentLabel}>الحالة: 
+          <Text style={[styles.studentValue, { color: studentInfo?.status === 'present' ? '#10B981' : '#64748B' }]}>
+            {studentInfo?.status === 'present' ? ' داخل الباص ✓' : ' لم يصعد بعد'}
+          </Text>
+        </Text>
+      </View>
+
+      <View style={styles.settingsCard}>
+        <Text style={styles.settingsTitle}>وقت التنبيه المفضل:</Text>
+        <View style={styles.optionsRow}>
+          {[1, 2, 5, 10].map(m => (
+            <TouchableOpacity 
+              key={m} 
+              style={[styles.optBtn, alertMinutes === m && styles.optBtnActive]}
               onPress={() => { setAlertMinutes(m); setNotified(false); }}
-              style={[styles.minBtn, alertMinutes === m && styles.minBtnOn]}
             >
-              <Text style={[styles.minText, alertMinutes === m && styles.minTextOn]}>
-                {m} د
-              </Text>
+              <Text style={[styles.optText, alertMinutes === m && styles.optTextActive]}>{m} د</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      <MapView style={styles.map} region={region}>
+      <MapView
+        style={styles.map}
+        initialRegion={{
+          latitude: myLocation?.latitude || 31.9454,
+          longitude: myLocation?.longitude || 35.9284,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05
+        }}
+        showsUserLocation={true}
+      >
         {myLocation && (
           <Marker coordinate={myLocation} title="منزلي" pinColor="green" />
         )}
@@ -115,35 +153,40 @@ export default function ParentScreen() {
           <Circle
             center={myLocation}
             radius={alertMinutes * 500}
-            fillColor="rgba(59, 130, 246, 0.2)"
+            fillColor="rgba(59, 130, 246, 0.1)"
             strokeColor="#3B82F6"
           />
         )}
       </MapView>
 
       {!busLocation && (
-        <Text style={styles.nobus}>⏳ في انتظار بث السائق للموقع...</Text>
+        <View style={styles.statusOverlay}>
+          <Text style={styles.statusText}>⏳ الباص غير متاح حالياً أو الرحلة لم تبدأ</Text>
+        </View>
       )}
-
-      <TouchableOpacity style={styles.backBtn} onPress={handleLogout}>
-        <Text style={styles.btnText}>تسجيل الخروج 🚪</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, paddingTop: 50, alignItems: 'center', backgroundColor: '#F5F7FB' },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 5, color: '#1E293B' },
-  parentName: { fontSize: 16, color: '#334155', marginBottom: 15 },
-  settings: { width: '100%', padding: 15, backgroundColor: '#fff', borderRadius: 12, marginBottom: 15, elevation: 2 },
-  settingsLabel: { fontSize: 14, color: '#64748B', textAlign: 'right', marginBottom: 10, fontWeight: '600' },
-  minBtn: { padding: 10, borderWidth: 1.5, borderColor: '#3B82F6', borderRadius: 8, marginLeft: 10, minWidth: 50, alignItems: 'center' },
-  minBtnOn: { backgroundColor: '#3B82F6' },
-  minText: { color: '#3B82F6', fontWeight: 'bold' },
-  minTextOn: { color: '#fff' },
-  map: { width: Dimensions.get('window').width - 40, height: '50%', borderRadius: 20, overflow: 'hidden' },
-  nobus: { fontSize: 14, color: '#EF4444', marginTop: 10, fontWeight: '600' },
-  backBtn: { backgroundColor: '#64748B', padding: 15, borderRadius: 12, width: '100%', alignItems: 'center', marginTop: 20 },
-  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  parentName: { fontSize: 14, color: '#64748B' },
+  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  infoCard: { margin: 15, padding: 15, backgroundColor: '#FFF', borderRadius: 15, elevation: 2 },
+  studentLabel: { fontSize: 14, color: '#64748B', textAlign: 'right', marginBottom: 5 },
+  studentValue: { fontWeight: 'bold', color: '#1E293B' },
+  settingsCard: { marginHorizontal: 15, marginBottom: 15, padding: 15, backgroundColor: '#FFF', borderRadius: 15, elevation: 2 },
+  settingsTitle: { fontSize: 13, fontWeight: 'bold', color: '#1E293B', textAlign: 'right', marginBottom: 10 },
+  optionsRow: { flexDirection: 'row-reverse', justifyContent: 'space-between' },
+  optBtn: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 10, backgroundColor: '#F1F5F9', minWidth: 60, alignItems: 'center' },
+  optBtnActive: { backgroundColor: '#3B82F6' },
+  optText: { fontSize: 12, color: '#64748B', fontWeight: 'bold' },
+  optTextActive: { color: '#FFF' },
+  map: { flex: 1 },
+  statusOverlay: { position: 'absolute', bottom: 20, left: 20, right: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 15, borderRadius: 12, alignItems: 'center', elevation: 5 },
+  statusText: { color: '#EF4444', fontWeight: 'bold', fontSize: 13 }
 });

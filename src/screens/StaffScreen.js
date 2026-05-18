@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, update, push } from "firebase/database";
 import { db } from '../firebaseConfig';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function StaffScreen() {
   const route = useRoute();
@@ -11,22 +12,19 @@ export default function StaffScreen() {
 
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState(user?.permissions || {});
 
   useEffect(() => {
-    if (!schoolId) {
-      setLoading(false);
-      return;
-    }
+    if (!schoolId) return;
 
+    // جلب الطلاب المرتبطين بالسائق الذي تعمل معه المرافقة
     const studentsRef = ref(db, `schools/${schoolId}/students`);
     const unsubscribe = onValue(studentsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const list = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key],
-          status: data[key].status || 'absent' 
-        }));
+        const list = Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .filter(s => !user.driver_id || s.driver_id === user.driver_id);
         setStudents(list);
       } else {
         setStudents([]);
@@ -35,13 +33,20 @@ export default function StaffScreen() {
     });
 
     return () => unsubscribe();
-  }, [schoolId]);
+  }, [schoolId, user]);
 
   const toggleStatus = async (studentId, currentStatus) => {
+    if (!permissions.markAttendance) {
+      Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية تسجيل الحضور');
+      return;
+    }
+
     const newStatus = currentStatus === 'present' ? 'absent' : 'present';
     try {
       await update(ref(db, `schools/${schoolId}/students/${studentId}`), {
-        status: newStatus
+        status: newStatus,
+        lastUpdate: new Date().toISOString(),
+        updatedBy: user.username
       });
     } catch (error) {
       Alert.alert('خطأ', 'فشل تحديث حالة الطالب');
@@ -52,91 +57,90 @@ export default function StaffScreen() {
     navigation.replace('Login');
   };
 
-  const presentCount = students.filter(s => s.status === 'present').length;
-  const absentCount = students.length - presentCount;
-
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-      </View>
-    );
+    return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
   }
 
+  const presentCount = students.filter(s => s.status === 'present').length;
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>تحضير الطلاب 📝</Text>
-        <Text style={styles.staffName}>المرافق: {user?.name || user?.username}</Text>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>خروج</Text>
+        </TouchableOpacity>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.title}>لوحة المرافقة 📝</Text>
+          <Text style={styles.staffName}>{user?.name}</Text>
+        </View>
       </View>
 
-      <View style={styles.statsContainer}>
-        <View style={[styles.statBox, { backgroundColor: '#DCFCE7' }]}>
-          <Text style={[styles.statNumber, { color: '#166534' }]}>{presentCount}</Text>
-          <Text style={styles.statLabel}>حاضر</Text>
+      <View style={styles.summaryCard}>
+        <View style={styles.statItem}>
+          <Text style={styles.statVal}>{students.length}</Text>
+          <Text style={styles.statLab}>الإجمالي</Text>
         </View>
-        <View style={[styles.statBox, { backgroundColor: '#FEE2E2' }]}>
-          <Text style={[styles.statNumber, { color: '#991B1B' }]}>{absentCount}</Text>
-          <Text style={styles.statLabel}>غائب</Text>
+        <View style={[styles.statItem, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0' }]}>
+          <Text style={[styles.statVal, { color: '#10B981' }]}>{presentCount}</Text>
+          <Text style={styles.statLab}>صعدوا</Text>
         </View>
-        <View style={[styles.statBox, { backgroundColor: '#DBEAFE' }]}>
-          <Text style={[styles.statNumber, { color: '#1E40AF' }]}>{students.length}</Text>
-          <Text style={styles.statLabel}>الإجمالي</Text>
+        <View style={styles.statItem}>
+          <Text style={[styles.statVal, { color: '#EF4444' }]}>{students.length - presentCount}</Text>
+          <Text style={styles.statLab}>لم يصعدوا</Text>
         </View>
       </View>
+
+      {permissions.addStudentsAndLocation && (
+        <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('قريباً', 'سيتم تفعيل ميزة إضافة المواقع في التحديث القادم')}>
+          <Text style={styles.actionBtnText}>➕ إضافة طالب / موقع منزل</Text>
+        </TouchableOpacity>
+      )}
 
       <FlatList
         data={students}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={{ padding: 15 }}
         renderItem={({ item }) => (
           <View style={styles.studentCard}>
             <TouchableOpacity 
-              style={[styles.statusBtn, item.status === 'present' ? styles.btnPresent : styles.btnAbsent]}
+              style={[styles.statusToggle, { backgroundColor: item.status === 'present' ? '#10B981' : '#F1F5F9' }]}
               onPress={() => toggleStatus(item.id, item.status)}
             >
-              <Text style={styles.statusBtnText}>
-                {item.status === 'present' ? 'حاضر ✓' : 'غائب ✖'}
+              <Text style={[styles.statusToggleText, { color: item.status === 'present' ? '#FFF' : '#64748B' }]}>
+                {item.status === 'present' ? 'تم الركوب ✓' : 'لم يركب'}
               </Text>
             </TouchableOpacity>
             <View style={styles.studentInfo}>
               <Text style={styles.studentName}>{item.name}</Text>
-              <Text style={styles.studentClass}>الصف: {item.class}</Text>
+              <Text style={styles.studentSub}>{item.class} - {item.section}</Text>
             </View>
           </View>
         )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>لا يوجد طلاب مسجلين في هذه المدرسة حالياً</Text>
-        }
+        ListEmptyComponent={<Text style={styles.emptyText}>لا يوجد طلاب مرتبطين برحلتك حالياً</Text>}
       />
-
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutBtnText}>تسجيل الخروج</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FB', padding: 20, paddingTop: 50 },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { marginBottom: 20, alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#1E293B' },
-  staffName: { fontSize: 16, color: '#64748B', marginTop: 5 },
-  statsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  statBox: { flex: 1, marginHorizontal: 5, padding: 15, borderRadius: 12, alignItems: 'center', elevation: 1 },
-  statNumber: { fontSize: 20, fontWeight: 'bold' },
-  statLabel: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  listContent: { paddingBottom: 20 },
-  studentCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, flexDirection: 'row', alignItems: 'center', elevation: 1 },
-  studentInfo: { flex: 1, alignItems: 'flex-end' },
-  studentName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
-  studentClass: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  statusBtn: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8, minWidth: 90, alignItems: 'center' },
-  btnPresent: { backgroundColor: '#10B981' },
-  btnAbsent: { backgroundColor: '#EF4444' },
-  statusBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
-  emptyText: { textAlign: 'center', color: '#64748B', marginTop: 50 },
-  logoutBtn: { backgroundColor: '#64748B', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  logoutBtnText: { color: '#FFF', fontWeight: 'bold' }
+  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  staffName: { fontSize: 14, color: '#64748B' },
+  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  summaryCard: { margin: 15, backgroundColor: '#FFF', borderRadius: 15, flexDirection: 'row', padding: 15, elevation: 2 },
+  statItem: { flex: 1, alignItems: 'center' },
+  statVal: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
+  statLab: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  actionBtn: { marginHorizontal: 15, marginBottom: 10, backgroundColor: '#3B82F6', padding: 12, borderRadius: 10, alignItems: 'center' },
+  actionBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+  studentCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 1 },
+  studentInfo: { alignItems: 'flex-end' },
+  studentName: { fontSize: 15, fontWeight: 'bold', color: '#1E293B' },
+  studentSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  statusToggle: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, minWidth: 100, alignItems: 'center' },
+  statusToggleText: { fontSize: 12, fontWeight: 'bold' },
+  emptyText: { textAlign: 'center', color: '#64748B', marginTop: 50 }
 });

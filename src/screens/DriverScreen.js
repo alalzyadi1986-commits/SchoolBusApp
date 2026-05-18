@@ -1,77 +1,144 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, ActivityIndicator } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { ref, set, onValue } from "firebase/database";
+import { ref, set, onValue, update } from "firebase/database";
 import { db } from '../firebaseConfig';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { width, height } = Dimensions.get('window');
 
 export default function DriverScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { schoolId, user } = route.params || {};
 
-  const [currentLoc, setCurrentLoc] = useState({
-    latitude: 31.9454,
-    longitude: 35.9284
-  });
+  const [currentLoc, setCurrentLoc] = useState(null);
   const [students, setStudents] = useState([]);
+  const [isTripActive, setIsTripActive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const locationSubscription = useRef(null);
 
   useEffect(() => {
-    if (!schoolId) return;
+    if (!schoolId || !user?.username) return;
 
-    // جلب طلاب المدرسة فقط باستخدام schoolId
+    // جلب الطلاب المرتبطين بهذا السائق فقط
     const studentsRef = ref(db, `schools/${schoolId}/students`);
     const unsubscribeStudents = onValue(studentsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const list = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        const list = Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .filter(s => s.driver_id === user.username);
         setStudents(list);
-      } else { setStudents([]); }
+      } else {
+        setStudents([]);
+      }
+      setLoading(false);
     });
 
-    // بث موقع السائق لمدرسته فقط
-    let locationSubscription;
-    Location.requestForegroundPermissionsAsync().then(({ status }) => {
-      if (status !== 'granted') return;
-      Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 5 },
-        (loc) => {
-          setCurrentLoc(loc.coords);
-          // حفظ موقع الباص تحت مدرسته فقط
-          set(ref(db, `schools/${schoolId}/bus`), {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            updatedAt: new Date().toISOString(),
-            driverName: user?.name || 'سائق'
-          });
-        }
-      ).then(sub => locationSubscription = sub);
-    });
+    // طلب صلاحيات الموقع
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('خطأ', 'يجب السماح بالوصول للموقع لبث التتبع');
+        return;
+      }
+      let loc = await Location.getCurrentPositionAsync({});
+      setCurrentLoc(loc.coords);
+    })();
 
     return () => {
       unsubscribeStudents();
-      if (locationSubscription) locationSubscription.remove();
+      stopTracking();
     };
   }, [schoolId, user]);
 
-  const handleLogout = () => {
-    navigation.replace('Login');
+  const startTrip = async () => {
+    setIsTripActive(true);
+    locationSubscription.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+      (loc) => {
+        setCurrentLoc(loc.coords);
+        // تحديث موقع الباص في Firebase
+        update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          updatedAt: new Date().toISOString(),
+          driverName: user.name,
+          isActive: true
+        });
+      }
+    );
   };
 
+  const stopTracking = () => {
+    if (locationSubscription.current) {
+      locationSubscription.current.remove();
+      locationSubscription.current = null;
+    }
+    if (schoolId && user?.username) {
+      update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+        isActive: false,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    setIsTripActive(false);
+  };
+
+  const handleLogout = () => {
+    Alert.alert('تسجيل الخروج', 'هل تريد إنهاء الرحلة وتسجيل الخروج؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'خروج', style: 'destructive', onPress: () => {
+          stopTracking();
+          navigation.replace('Login');
+        }
+      }
+    ]);
+  };
+
+  if (loading) {
+    return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
+  }
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>لوحة السائق 🚌</Text>
-      <Text style={styles.driverName}>مرحباً: {user?.name || 'أيها السائق'}</Text>
-      <Text style={styles.subTitle}>جاري بث موقعك لأهل الطلاب...</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>خروج</Text>
+        </TouchableOpacity>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.title}>لوحة السائق 🚌</Text>
+          <Text style={styles.driverName}>{user?.name}</Text>
+        </View>
+      </View>
+
+      <View style={styles.statusCard}>
+        <View style={[styles.statusIndicator, { backgroundColor: isTripActive ? '#10B981' : '#EF4444' }]} />
+        <Text style={styles.statusText}>{isTripActive ? 'الرحلة جارية - يتم بث موقعك الآن' : 'الرحلة متوقفة'}</Text>
+        <TouchableOpacity 
+          style={[styles.tripBtn, { backgroundColor: isTripActive ? '#EF4444' : '#10B981' }]} 
+          onPress={isTripActive ? stopTracking : startTrip}
+        >
+          <Text style={styles.tripBtnText}>{isTripActive ? 'إنهاء الرحلة' : 'بدء الرحلة'}</Text>
+        </TouchableOpacity>
+      </View>
 
       <MapView
         style={styles.map}
         initialRegion={{
-          ...currentLoc,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05
+          latitude: currentLoc?.latitude || 31.9454,
+          longitude: currentLoc?.longitude || 35.9284,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02
         }}
+        region={currentLoc ? {
+          latitude: currentLoc.latitude,
+          longitude: currentLoc.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02
+        } : undefined}
         showsUserLocation={true}
       >
         {students.map(s => (
@@ -80,25 +147,59 @@ export default function DriverScreen() {
               key={s.id}
               coordinate={{ latitude: s.latitude, longitude: s.longitude }}
               title={s.name}
+              description={`الصف: ${s.class} | ولي الأمر: ${s.parent_username}`}
               pinColor="orange"
             />
           ) : null
         ))}
       </MapView>
 
-      <TouchableOpacity style={styles.backBtn} onPress={handleLogout}>
-        <Text style={styles.btnText}>إنهاء الرحلة وتسجيل الخروج 🔴</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.studentListContainer}>
+        <Text style={styles.listTitle}>قائمة طلاب الرحلة ({students.length})</Text>
+        <FlatList
+          data={students}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.studentItem}>
+              <View style={styles.studentInfo}>
+                <Text style={styles.studentName}>{item.name}</Text>
+                <Text style={styles.studentSub}>{item.class} - {item.section}</Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: item.status === 'present' ? '#DCFCE7' : '#F1F5F9' }]}>
+                <Text style={[styles.statusBadgeText, { color: item.status === 'present' ? '#166534' : '#64748B' }]}>
+                  {item.status === 'present' ? 'صعد' : 'لم يصعد'}
+                </Text>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={<Text style={styles.emptyText}>لا يوجد طلاب مرتبطين بك حالياً</Text>}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, paddingTop: 50, alignItems: 'center', backgroundColor: '#F5F7FB' },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 5, color: '#1E293B' },
-  driverName: { fontSize: 16, color: '#334155', marginBottom: 5 },
-  subTitle: { fontSize: 13, color: '#10B981', marginBottom: 10, fontWeight: '600' },
-  map: { width: Dimensions.get('window').width - 40, height: '65%', borderRadius: 20, overflow: 'hidden' },
-  backBtn: { backgroundColor: '#EF4444', padding: 15, borderRadius: 12, width: '100%', alignItems: 'center', marginTop: 20, elevation: 2 },
-  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  driverName: { fontSize: 14, color: '#64748B' },
+  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  statusCard: { margin: 15, padding: 15, backgroundColor: '#FFF', borderRadius: 15, flexDirection: 'row', alignItems: 'center', elevation: 2 },
+  statusIndicator: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
+  statusText: { flex: 1, fontSize: 13, color: '#1E293B', fontWeight: '600' },
+  tripBtn: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 10 },
+  tripBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+  map: { width: width, height: height * 0.35 },
+  studentListContainer: { flex: 1, padding: 15 },
+  listTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 10, textAlign: 'right' },
+  studentItem: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 1 },
+  studentInfo: { alignItems: 'flex-end' },
+  studentName: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
+  studentSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  statusBadgeText: { fontSize: 11, fontWeight: 'bold' },
+  emptyText: { textAlign: 'center', color: '#64748B', marginTop: 20 }
 });
