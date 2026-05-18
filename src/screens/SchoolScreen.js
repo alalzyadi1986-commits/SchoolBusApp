@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, ScrollView, StatusBar } from 'react-native';
+import { 
+  View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, 
+  Alert, ActivityIndicator, ScrollView, StatusBar, Modal, Dimensions
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ref, set, push, get, remove, onValue, update } from 'firebase/database';
 import { db } from '../firebaseConfig';
+
+const { width } = Dimensions.get('window');
 
 export default function SchoolScreen() {
   const route = useRoute();
@@ -15,45 +20,38 @@ export default function SchoolScreen() {
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [schoolData, setSchoolData] = useState(null);
 
+  // القوائم
   const [driversList, setDriversList] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [parentsList, setParentsList] = useState([]);
   const [studentsList, setStudentsList] = useState([]);
 
-  // حالات التعديل
+  // حالات النوافذ المنبثقة (Modals)
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState(''); // 'driver', 'staff', 'parent', 'student'
   const [editingId, setEditingId] = useState(null);
 
-  // حقول الإدخال للسائقين
-  const [driverUser, setDriverUser] = useState('');
-  const [driverName, setDriverName] = useState('');
-  const [driverPass, setDriverPass] = useState('');
-  const [driverPhone, setDriverPhone] = useState('');
-  const [busNumber, setBusNumber] = useState('');
+  // حقول الإدخال المشتركة
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
 
-  // حقول الإدخال للمرافقين
-  const [staffUser, setStaffUser] = useState('');
-  const [staffName, setStaffName] = useState('');
-  const [staffPass, setStaffPass] = useState('');
-  const [staffPhone, setStaffPhone] = useState('');
-  const [selectedDriverForStaff, setSelectedDriverForStaff] = useState('');
+  // حقول خاصة
+  const [busNumber, setBusNumber] = useState('');
+  const [selectedDriverId, setSelectedDriverId] = useState('');
+  const [studentClass, setStudentClass] = useState('');
+  const [studentSection, setStudentSection] = useState('');
+  const [selectedParentId, setSelectedParentId] = useState('');
+  const [selectedDriverForStudent, setSelectedDriverForStudent] = useState('');
+  
   const [permissions, setPermissions] = useState({
     viewLocation: true,
     markAttendance: true,
     contactParents: false,
-    editStudents: false
+    editStudents: false,
+    addStudentsAndLocation: false // الصلاحية الجديدة
   });
-
-  // حقول الإدخال للأهل
-  const [parentUser, setParentUser] = useState('');
-  const [familyName, setFamilyName] = useState('');
-  const [parentPass, setParentPass] = useState('');
-  const [parentPhone, setParentPhone] = useState('');
-
-  // حقول الإدخال للطلاب
-  const [studentName, setStudentName] = useState('');
-  const [studentClass, setStudentClass] = useState('');
-  const [selectedParent, setSelectedParent] = useState('');
-  const [selectedDriver, setSelectedDriver] = useState('');
 
   useEffect(() => {
     if (schoolId) {
@@ -62,10 +60,8 @@ export default function SchoolScreen() {
         if (snapshot.exists()) {
           const data = snapshot.val();
           setSchoolData(data);
-          
-          const today = new Date();
           const expiry = new Date(data.endDate);
-          setIsReadOnly(expiry < today);
+          setIsReadOnly(expiry < new Date());
 
           if (data.drivers) setDriversList(Object.keys(data.drivers).map(key => ({ username: key, ...data.drivers[key] })));
           else setDriversList([]);
@@ -86,111 +82,92 @@ export default function SchoolScreen() {
 
   const checkAccess = () => {
     if (isReadOnly) {
-      Alert.alert('اشتراك منتهي', 'يرجى تجديد الاشتراك للمتابعة والقيام بالتعديلات.');
+      Alert.alert('اشتراك منتهي', 'يرجى تجديد الاشتراك للمتابعة.');
       return false;
     }
     return true;
   };
 
-  const resetForms = () => {
+  const resetForm = () => {
     setEditingId(null);
-    setDriverUser(''); setDriverName(''); setDriverPass(''); setDriverPhone(''); setBusNumber('');
-    setStaffUser(''); setStaffName(''); setStaffPass(''); setStaffPhone(''); setSelectedDriverForStaff('');
-    setParentUser(''); setFamilyName(''); setParentPass(''); setParentPhone('');
-    setStudentName(''); setStudentClass(''); setSelectedParent(''); setSelectedDriver('');
-    setPermissions({ viewLocation: true, markAttendance: true, contactParents: false, editStudents: false });
+    setUsername(''); setPassword(''); setName(''); setPhone('');
+    setBusNumber(''); setSelectedDriverId(''); setStudentClass(''); setStudentSection('');
+    setSelectedParentId(''); setSelectedDriverForStudent('');
+    setPermissions({
+      viewLocation: true, markAttendance: true, contactParents: false, 
+      editStudents: false, addStudentsAndLocation: false
+    });
   };
 
-  const handleSaveDriver = async () => {
+  const openModal = (type, item = null) => {
     if (!checkAccess()) return;
-    if (!driverUser || !driverName || !driverPass || !driverPhone || !busNumber) {
-      Alert.alert('خطأ', 'الرجاء تعبئة جميع حقول السائق');
-      return;
-    }
-    try {
-      const data = { name: driverName, password: driverPass, phone: driverPhone, bus_number: busNumber, role: 'driver' };
-      await set(ref(db, `schools/${schoolId}/drivers/${driverUser.trim()}`), data);
-      Alert.alert('نجاح', editingId ? 'تم تحديث بيانات السائق' : 'تم إضافة السائق بنجاح');
-      resetForms();
-    } catch (error) { Alert.alert('خطأ', 'فشلت العملية'); }
-  };
-
-  const handleSaveStaff = async () => {
-    if (!checkAccess()) return;
-    if (!staffUser || !staffName || !staffPass || !staffPhone) {
-      Alert.alert('خطأ', 'الرجاء تعبئة جميع حقول المرافقة');
-      return;
-    }
-    try {
-      const data = {
-        name: staffName,
-        password: staffPass,
-        phone: staffPhone,
-        driver_id: selectedDriverForStaff,
-        permissions: permissions,
-        role: 'staff'
-      };
-      await set(ref(db, `schools/${schoolId}/staff/${staffUser.trim()}`), data);
-      Alert.alert('نجاح', editingId ? 'تم تحديث بيانات المرافقة' : 'تم إضافة المرافقة بنجاح');
-      resetForms();
-    } catch (error) { Alert.alert('خطأ', 'فشلت العملية'); }
-  };
-
-  const handleSaveParent = async () => {
-    if (!checkAccess()) return;
-    if (!parentUser || !familyName || !parentPass || !parentPhone) {
-      Alert.alert('خطأ', 'الرجاء تعبئة جميع حقول الأهل');
-      return;
-    }
-    try {
-      const data = { family_name: familyName, password: parentPass, phone: parentPhone, role: 'parent' };
-      await set(ref(db, `schools/${schoolId}/parents/${parentUser.trim()}`), data);
-      Alert.alert('نجاح', editingId ? 'تم تحديث بيانات العائلة' : 'تم إنشاء حساب العائلة بنجاح');
-      resetForms();
-    } catch (error) { Alert.alert('خطأ', 'فشلت العملية'); }
-  };
-
-  const handleSaveStudent = async () => {
-    if (!checkAccess()) return;
-    if (!studentName || !studentClass || !selectedParent || !selectedDriver) {
-      Alert.alert('خطأ', 'الرجاء تعبئة جميع حقول الطالب');
-      return;
-    }
-    try {
-      const data = { name: studentName, class: studentClass, parent_username: selectedParent, driver_id: selectedDriver };
-      if (editingId) {
-        await update(ref(db, `schools/${schoolId}/students/${editingId}`), data);
-      } else {
-        await push(ref(db, `schools/${schoolId}/students`), data);
+    setModalType(type);
+    resetForm();
+    if (item) {
+      setEditingId(item.username || item.id);
+      setUsername(item.username || '');
+      setName(item.name || item.family_name || '');
+      setPassword(item.password || '');
+      setPhone(item.phone || '');
+      if (type === 'driver') setBusNumber(item.bus_number || '');
+      if (type === 'staff') {
+        setSelectedDriverId(item.driver_id || '');
+        if (item.permissions) setPermissions(item.permissions);
       }
-      Alert.alert('نجاح', 'تم حفظ بيانات الطالب');
-      resetForms();
-    } catch (error) { Alert.alert('خطأ', 'فشلت العملية'); }
-  };
-
-  const togglePermission = (key) => {
-    setPermissions(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleEdit = (item, type) => {
-    if (!checkAccess()) return;
-    setEditingId(item.username || item.id);
-    if (type === 'driver') {
-      setActiveTab('drivers');
-      setDriverUser(item.username); setDriverName(item.name); setDriverPass(item.password); setDriverPhone(item.phone); setBusNumber(item.bus_number);
-    } else if (type === 'staff') {
-      setActiveTab('staff');
-      setStaffUser(item.username); setStaffName(item.name); setStaffPass(item.password); setStaffPhone(item.phone);
-      setSelectedDriverForStaff(item.driver_id || '');
-      if (item.permissions) setPermissions(item.permissions);
-    } else if (type === 'parent') {
-      setActiveTab('parents');
-      setParentUser(item.username); setFamilyName(item.family_name); setParentPass(item.password); setParentPhone(item.phone);
-    } else if (type === 'student') {
-      setActiveTab('students');
-      setStudentName(item.name); setStudentClass(item.class); setSelectedParent(item.parent_username); setSelectedDriver(item.driver_id);
+      if (type === 'student') {
+        setStudentClass(item.class || '');
+        setStudentSection(item.section || '');
+        setSelectedParentId(item.parent_username || '');
+        setSelectedDriverForStudent(item.driver_id || '');
+      }
     }
+    setShowModal(true);
   };
+
+  const handleSave = async () => {
+    if (!name || !password || (modalType !== 'student' && !username)) {
+      Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية');
+      return;
+    }
+
+    try {
+      let data = { name, password, phone, role: modalType };
+      let path = `schools/${schoolId}/${modalType}s/${username.trim()}`;
+
+      if (modalType === 'driver') data.bus_number = busNumber;
+      if (modalType === 'staff') {
+        data.driver_id = selectedDriverId;
+        data.permissions = permissions;
+      }
+      if (modalType === 'parent') data.family_name = name;
+      if (modalType === 'student') {
+        data = { name, class: studentClass, section: studentSection, parent_username: selectedParentId, driver_id: selectedDriverForStudent };
+        if (editingId) {
+          await update(ref(db, `schools/${schoolId}/students/${editingId}`), data);
+        } else {
+          await push(ref(db, `schools/${schoolId}/students`), data);
+        }
+      } else {
+        await set(ref(db, path), data);
+      }
+
+      Alert.alert('نجاح', 'تم حفظ البيانات بنجاح');
+      setShowModal(false);
+    } catch (e) { Alert.alert('خطأ', 'فشلت العملية'); }
+  };
+
+  const renderStudentItem = ({ item }) => (
+    <View style={styles.dataRow}>
+      <View style={styles.rowActions}>
+        <TouchableOpacity onPress={() => openModal('student', item)}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(`students/${item.id}`, 'الطالب')}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
+      </View>
+      <View style={styles.rowInfo}>
+        <Text style={styles.rowName}>{item.name}</Text>
+        <Text style={styles.rowSub}>{item.class} - {item.section}</Text>
+      </View>
+    </View>
+  );
 
   const handleDelete = (path, type) => {
     if (!checkAccess()) return;
@@ -198,20 +175,18 @@ export default function SchoolScreen() {
       { text: 'إلغاء', style: 'cancel' },
       { text: 'حذف', style: 'destructive', onPress: async () => {
           await remove(ref(db, `schools/${schoolId}/${path}`));
-          Alert.alert('نجاح', 'تم الحذف');
         }
       }
     ]);
   };
 
-  const PermissionItem = ({ label, value, onToggle }) => (
-    <TouchableOpacity style={styles.permissionRow} onPress={onToggle}>
-      <View style={[styles.checkbox, value && styles.checkboxChecked]}>
-        {value && <Text style={styles.checkboxTick}>✓</Text>}
-      </View>
-      <Text style={styles.permissionLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
+  // تجميع الطلاب حسب الصف والشعبة
+  const groupedStudents = studentsList.reduce((acc, student) => {
+    const key = `${student.class || 'بدون صف'} - ${student.section || 'بدون شعبة'}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(student);
+    return acc;
+  }, {});
 
   return (
     <SafeAreaView style={styles.container}>
@@ -230,7 +205,7 @@ export default function SchoolScreen() {
 
       <View style={styles.tabBar}>
         {['drivers', 'staff', 'parents', 'students'].map((tab) => (
-          <TouchableOpacity key={tab} style={[styles.tabItem, activeTab === tab && styles.activeTabItem]} onPress={() => { setActiveTab(tab); resetForms(); }}>
+          <TouchableOpacity key={tab} style={[styles.tabItem, activeTab === tab && styles.activeTabItem]} onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
               {tab === 'drivers' ? 'السائقين' : tab === 'staff' ? 'المرافقين' : tab === 'parents' ? 'الأهل' : 'الطلاب'}
             </Text>
@@ -238,119 +213,175 @@ export default function SchoolScreen() {
         ))}
       </View>
 
-      <ScrollView style={styles.contentScroll} keyboardShouldPersistTaps="handled">
-        {activeTab === 'drivers' && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{editingId ? 'تعديل سائق' : 'إضافة سائق جديد'}</Text>
-            <TextInput style={[styles.input, editingId && styles.disabledInput]} placeholder="اسم المستخدم" value={driverUser} onChangeText={setDriverUser} editable={!editingId} autoCapitalize="none" />
-            <TextInput style={styles.input} placeholder="اسم السائق" value={driverName} onChangeText={setDriverName} />
-            <TextInput style={styles.input} placeholder="كلمة المرور" value={driverPass} onChangeText={setDriverPass} />
-            <TextInput style={styles.input} placeholder="رقم الهاتف" value={driverPhone} onChangeText={setDriverPhone} keyboardType="phone-pad" />
-            <TextInput style={styles.input} placeholder="رقم الباص" value={busNumber} onChangeText={setBusNumber} />
-            <TouchableOpacity style={[styles.addBtn, isReadOnly && styles.disabledBtn]} onPress={handleSaveDriver}>
-              <Text style={styles.addBtnText}>{editingId ? 'تحديث' : 'حفظ'}</Text>
-            </TouchableOpacity>
-            {editingId && <TouchableOpacity style={styles.cancelBtn} onPress={resetForms}><Text style={styles.cancelBtnText}>إلغاء</Text></TouchableOpacity>}
-            
-            <Text style={styles.listTitle}>قائمة السائقين</Text>
-            {driversList.map((item) => (
-              <View key={item.username} style={styles.dataRow}>
-                <View style={styles.rowActions}>
-                  <TouchableOpacity onPress={() => handleEdit(item, 'driver')}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDelete(`drivers/${item.username}`, 'السائق')}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
-                </View>
-                <View style={styles.rowInfo}><Text style={styles.rowName}>{item.name}</Text><Text style={styles.rowSub}>{item.bus_number}</Text></View>
+      <View style={styles.content}>
+        <TouchableOpacity style={styles.mainAddBtn} onPress={() => openModal(activeTab.slice(0, -1))}>
+          <Text style={styles.mainAddBtnText}>➕ إضافة {activeTab === 'drivers' ? 'سائق' : activeTab === 'staff' ? 'مرافق' : activeTab === 'parents' ? 'حساب عائلة' : 'طالب'}</Text>
+        </TouchableOpacity>
+
+        {activeTab === 'students' ? (
+          <ScrollView>
+            {Object.keys(groupedStudents).map(group => (
+              <View key={group} style={styles.groupContainer}>
+                <Text style={styles.groupHeader}>{group}</Text>
+                {groupedStudents[group].map(student => (
+                  <View key={student.id} style={styles.dataRow}>
+                    <View style={styles.rowActions}>
+                      <TouchableOpacity onPress={() => openModal('student', student)}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(`students/${student.id}`, 'الطالب')}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
+                    </View>
+                    <View style={styles.rowInfo}>
+                      <Text style={styles.rowName}>{student.name}</Text>
+                      <Text style={styles.rowSub}>ولي الأمر: {student.parent_username}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             ))}
-          </View>
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={activeTab === 'drivers' ? driversList : activeTab === 'staff' ? staffList : parentsList}
+            keyExtractor={item => item.username}
+            renderItem={({ item }) => (
+              <View style={styles.dataRow}>
+                <View style={styles.rowActions}>
+                  <TouchableOpacity onPress={() => openModal(activeTab.slice(0, -1), item)}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(`${activeTab}/${item.username}`, activeTab)}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
+                </View>
+                <View style={styles.rowInfo}>
+                  <Text style={styles.rowName}>{item.name || item.family_name}</Text>
+                  <Text style={styles.rowSub}>{item.username} {item.bus_number ? `| باص: ${item.bus_number}` : ''}</Text>
+                </View>
+              </View>
+            )}
+          />
         )}
+      </View>
 
-        {activeTab === 'staff' && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{editingId ? 'تعديل مرافقة' : 'إضافة مرافقة جديدة'}</Text>
-            <TextInput style={[styles.input, editingId && styles.disabledInput]} placeholder="اسم المستخدم" value={staffUser} onChangeText={setStaffUser} editable={!editingId} autoCapitalize="none" />
-            <TextInput style={styles.input} placeholder="اسم المرافقة" value={staffName} onChangeText={setStaffName} />
-            <TextInput style={styles.input} placeholder="كلمة المرور" value={staffPass} onChangeText={setStaffPass} />
-            <TextInput style={styles.input} placeholder="رقم الهاتف" value={staffPhone} onChangeText={setStaffPhone} keyboardType="phone-pad" />
-            
-            <Text style={styles.subTitle}>ربط مع سائق:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalSelect}>
-              {driversList.map(d => (
-                <TouchableOpacity key={d.username} style={[styles.selectItem, selectedDriverForStaff === d.username && styles.selectedItem]} onPress={() => setSelectedDriverForStaff(d.username)}>
-                  <Text style={[styles.selectText, selectedDriverForStaff === d.username && styles.selectedText]}>{d.name}</Text>
-                </TouchableOpacity>
-              ))}
+      {/* Modal الإضافة والتعديل */}
+      <Modal visible={showModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editingId ? 'تعديل البيانات' : 'إضافة جديد'}</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {modalType !== 'student' && (
+                <TextInput style={[styles.input, editingId && styles.disabledInput]} placeholder="اسم المستخدم" value={username} onChangeText={setUsername} editable={!editingId} />
+              )}
+              <TextInput style={styles.input} placeholder={modalType === 'parent' ? 'اسم العائلة' : 'الاسم الكامل'} value={name} onChangeText={setName} />
+              <TextInput style={styles.input} placeholder="كلمة المرور" value={password} onChangeText={setPassword} />
+              <TextInput style={styles.input} placeholder="رقم الهاتف" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+
+              {modalType === 'driver' && (
+                <TextInput style={styles.input} placeholder="رقم الباص" value={busNumber} onChangeText={setBusNumber} />
+              )}
+
+              {modalType === 'staff' && (
+                <View>
+                  <Text style={styles.subTitle}>ربط مع سائق:</Text>
+                  <ScrollView horizontal style={styles.horizontalSelect}>
+                    <TouchableOpacity 
+                      style={[styles.selectItem, selectedDriverId === '' && styles.selectedItem]} 
+                      onPress={() => setSelectedDriverId('')}
+                    >
+                      <Text style={[styles.selectText, selectedDriverId === '' && styles.selectedText]}>بدون ربط</Text>
+                    </TouchableOpacity>
+                    {driversList.map(d => (
+                      <TouchableOpacity 
+                        key={d.username} 
+                        style={[styles.selectItem, selectedDriverId === d.username && styles.selectedItem]} 
+                        onPress={() => setSelectedDriverId(d.username)}
+                      >
+                        <Text style={[styles.selectText, selectedDriverId === d.username && styles.selectedText]}>{d.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <Text style={styles.subTitle}>الصلاحيات:</Text>
+                  <PermissionToggle label="رؤية الموقع" value={permissions.viewLocation} onToggle={() => setPermissions({...permissions, viewLocation: !permissions.viewLocation})} />
+                  <PermissionToggle label="تسجيل الحضور" value={permissions.markAttendance} onToggle={() => setPermissions({...permissions, markAttendance: !permissions.markAttendance})} />
+                  <PermissionToggle label="إضافة طلاب ومواقع" value={permissions.addStudentsAndLocation} onToggle={() => setPermissions({...permissions, addStudentsAndLocation: !permissions.addStudentsAndLocation})} />
+                </View>
+              )}
+
+              {modalType === 'student' && (
+                <View>
+                  <TextInput style={styles.input} placeholder="الصف (مثلاً: الأول)" value={studentClass} onChangeText={setStudentClass} />
+                  <TextInput style={styles.input} placeholder="الشعبة (مثلاً: أ)" value={studentSection} onChangeText={setStudentSection} />
+                  <Text style={styles.subTitle}>اختر ولي الأمر:</Text>
+                  <ScrollView horizontal style={styles.horizontalSelect}>
+                    {parentsList.map(p => (
+                      <TouchableOpacity key={p.username} style={[styles.selectItem, selectedParentId === p.username && styles.selectedItem]} onPress={() => setSelectedParentId(p.username)}>
+                        <Text style={[styles.selectText, selectedParentId === p.username && styles.selectedText]}>{p.family_name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>حفظ البيانات</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setShowModal(false)}>
+                <Text style={styles.closeBtnText}>إلغاء</Text>
+              </TouchableOpacity>
             </ScrollView>
-
-            <Text style={styles.subTitle}>الصلاحيات:</Text>
-            <PermissionItem label="رؤية موقع الطلاب" value={permissions.viewLocation} onToggle={() => togglePermission('viewLocation')} />
-            <PermissionItem label="تسجيل الحضور والغياب" value={permissions.markAttendance} onToggle={() => togglePermission('markAttendance')} />
-            <PermissionItem label="التواصل مع الأهل" value={permissions.contactParents} onToggle={() => togglePermission('contactParents')} />
-            <PermissionItem label="تعديل بيانات الطلاب" value={permissions.editStudents} onToggle={() => togglePermission('editStudents')} />
-
-            <TouchableOpacity style={[styles.addBtn, isReadOnly && styles.disabledBtn]} onPress={handleSaveStaff}>
-              <Text style={styles.addBtnText}>{editingId ? 'تحديث' : 'حفظ'}</Text>
-            </TouchableOpacity>
-            {editingId && <TouchableOpacity style={styles.cancelBtn} onPress={resetForms}><Text style={styles.cancelBtnText}>إلغاء</Text></TouchableOpacity>}
-
-            <Text style={styles.listTitle}>قائمة المرافقين</Text>
-            {staffList.map((item) => (
-              <View key={item.username} style={styles.dataRow}>
-                <View style={styles.rowActions}>
-                  <TouchableOpacity onPress={() => handleEdit(item, 'staff')}><Text style={styles.editText}>تعديل</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDelete(`staff/${item.username}`, 'المرافقة')}><Text style={styles.deleteText}>حذف</Text></TouchableOpacity>
-                </View>
-                <View style={styles.rowInfo}><Text style={styles.rowName}>{item.name}</Text><Text style={styles.rowSub}>مع السائق: {item.driver_id || 'غير مرتبط'}</Text></View>
-              </View>
-            ))}
           </View>
-        )}
-
-        {/* بقية التبويبات (الأهل والطلاب) تتبع نفس المنطق مع تفعيل أزرار التعديل */}
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
+const PermissionToggle = ({ label, value, onToggle }) => (
+  <TouchableOpacity style={styles.permissionRow} onPress={onToggle}>
+    <View style={[styles.checkbox, value && styles.checkboxChecked]}>
+      {value && <Text style={styles.checkboxTick}>✓</Text>}
+    </View>
+    <Text style={styles.permissionLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f7f6' },
-  header: { padding: 15, backgroundColor: '#fff', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50', textAlign: 'right' },
-  subscriptionInfo: { fontSize: 11, color: '#27ae60', fontWeight: '600', textAlign: 'right' },
-  logoutBtn: { padding: 8, backgroundColor: '#fdf2f2', borderRadius: 8 },
-  logoutText: { color: '#e74c3c', fontWeight: 'bold' },
-  tabBar: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 10 },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  activeTabItem: { borderBottomWidth: 3, borderBottomColor: '#e67e22' },
-  tabText: { color: '#7f8c8d', fontSize: 12 },
-  activeTabText: { color: '#e67e22', fontWeight: 'bold' },
-  contentScroll: { flex: 1, padding: 15 },
-  sectionCard: { backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 20, elevation: 2 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 15, color: '#2c3e50', textAlign: 'right' },
-  input: { backgroundColor: '#f9f9f9', padding: 12, borderRadius: 8, marginBottom: 10, textAlign: 'right', borderWidth: 1, borderColor: '#eee' },
-  disabledInput: { backgroundColor: '#eee', color: '#7f8c8d' },
-  subTitle: { fontSize: 14, fontWeight: 'bold', marginVertical: 10, textAlign: 'right', color: '#34495e' },
-  horizontalSelect: { flexDirection: 'row-reverse', marginBottom: 15 },
-  selectItem: { paddingHorizontal: 15, paddingVertical: 8, backgroundColor: '#f1f1f1', borderRadius: 20, marginLeft: 10 },
-  selectedItem: { backgroundColor: '#e67e22' },
-  selectText: { fontSize: 12, color: '#7f8c8d' },
-  selectedText: { color: '#fff', fontWeight: 'bold' },
-  permissionRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 12 },
-  checkbox: { width: 20, height: 20, borderWidth: 2, borderColor: '#e67e22', borderRadius: 4, marginLeft: 10, justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#e67e22' },
-  checkboxTick: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  permissionLabel: { fontSize: 13, color: '#2c3e50' },
-  addBtn: { backgroundColor: '#e67e22', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  disabledBtn: { backgroundColor: '#bdc3c7' },
-  addBtnText: { color: '#fff', fontWeight: 'bold' },
-  cancelBtn: { padding: 10, marginTop: 5, alignItems: 'center' },
-  cancelBtnText: { color: '#7f8c8d', fontSize: 13 },
-  listTitle: { fontSize: 14, fontWeight: 'bold', marginTop: 25, marginBottom: 15, textAlign: 'right', color: '#2c3e50' },
-  dataRow: { flexDirection: 'row', padding: 15, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f1f1', alignItems: 'center', justifyContent: 'space-between' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  subscriptionInfo: { fontSize: 11, color: '#10B981', fontWeight: '600' },
+  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  tabBar: { flexDirection: 'row', backgroundColor: '#FFF', paddingVertical: 5 },
+  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
+  activeTabItem: { borderBottomWidth: 3, borderBottomColor: '#3B82F6' },
+  tabText: { color: '#64748B', fontSize: 12 },
+  activeTabText: { color: '#3B82F6', fontWeight: 'bold' },
+  content: { flex: 1, padding: 15 },
+  mainAddBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 12, alignItems: 'center', marginBottom: 15, elevation: 2 },
+  mainAddBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+  dataRow: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 1 },
   rowActions: { flexDirection: 'row' },
-  editText: { color: '#3498db', fontWeight: 'bold', marginRight: 15, fontSize: 13 },
-  deleteText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 13 },
+  editText: { color: '#3B82F6', fontWeight: 'bold', marginRight: 15 },
+  deleteText: { color: '#EF4444', fontWeight: 'bold' },
   rowInfo: { alignItems: 'flex-end' },
-  rowName: { fontSize: 14, fontWeight: 'bold', color: '#2c3e50' },
-  rowSub: { fontSize: 12, color: '#7f8c8d', marginTop: 2 }
+  rowName: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
+  rowSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  groupContainer: { marginBottom: 20 },
+  groupHeader: { fontSize: 14, fontWeight: 'bold', color: '#3B82F6', marginBottom: 10, textAlign: 'right', backgroundColor: '#E2E8F0', padding: 8, borderRadius: 8 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 20, maxHeight: '90%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 10, marginBottom: 12, textAlign: 'right' },
+  disabledInput: { backgroundColor: '#E2E8F0', color: '#94A3B8' },
+  subTitle: { fontSize: 14, fontWeight: 'bold', marginVertical: 10, textAlign: 'right' },
+  horizontalSelect: { flexDirection: 'row-reverse', marginBottom: 15 },
+  selectItem: { paddingHorizontal: 15, paddingVertical: 8, backgroundColor: '#F1F5F9', borderRadius: 20, marginLeft: 10 },
+  selectedItem: { backgroundColor: '#3B82F6' },
+  selectText: { fontSize: 12, color: '#64748B' },
+  selectedText: { color: '#FFF', fontWeight: 'bold' },
+  permissionRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 15 },
+  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#3B82F6', borderRadius: 6, marginLeft: 10, justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: '#3B82F6' },
+  checkboxTick: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
+  permissionLabel: { fontSize: 14, color: '#1E293B' },
+  saveBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 20 },
+  saveBtnText: { color: '#FFF', fontWeight: 'bold' },
+  closeBtn: { padding: 15, alignItems: 'center' },
+  closeBtnText: { color: '#64748B', fontWeight: 'bold' }
 });
