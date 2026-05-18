@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, ScrollView, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Alert, ActivityIndicator, ScrollView, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ref, set, push, get, remove, onValue } from 'firebase/database';
 import { db } from '../firebaseConfig';
@@ -182,9 +183,11 @@ export default function SchoolScreen() {
         <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
           <Text style={styles.logoutText}>خروج</Text>
         </TouchableOpacity>
-        <View>
+        <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.headerTitle}>لوحة تحكم المدرسة</Text>
-          {isReadOnly && <Text style={styles.readOnlyText}>وضع المشاهدة فقط (الاشتراك منتهي)</Text>}
+          <Text style={[styles.subscriptionInfo, isReadOnly && { color: '#e74c3c' }]}>
+            {isReadOnly ? 'الاشتراك منتهي ❌' : `مشترك لغاية: ${schoolData ? new Date(schoolData.endDate).toLocaleDateString('ar-EG') : ''} ✅`}
+          </Text>
         </View>
       </View>
 
@@ -235,7 +238,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f7f6' },
   header: { padding: 15, backgroundColor: '#fff', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50', textAlign: 'right' },
-  readOnlyText: { fontSize: 10, color: '#e74c3c', textAlign: 'right' },
+  subscriptionInfo: { fontSize: 11, color: '#27ae60', fontWeight: '600', textAlign: 'right' },
   logoutBtn: { padding: 8, backgroundColor: '#fdf2f2', borderRadius: 8 },
   logoutText: { color: '#e74c3c', fontWeight: 'bold' },
   tabBar: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 10 },
