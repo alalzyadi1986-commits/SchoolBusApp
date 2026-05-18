@@ -5,7 +5,8 @@ import { ref, set, push, onValue, remove, update } from 'firebase/database';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SchoolScreen({ route, navigation }) {
-  const { schoolId, schoolName } = route.params || {};
+  const { schoolId, user } = route.params || {};
+  const schoolName = user?.schoolName || "";
   const [activeTab, setActiveTab] = useState('drivers');
   const [loading, setLoading] = useState(true);
   const [expiryDate, setExpiryDate] = useState('');
