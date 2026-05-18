@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, get } from 'firebase/database';
 import { db } from '../firebaseConfig'; 
+import { translations } from '../i18n';
 
 const { width } = Dimensions.get('window');
 
@@ -26,6 +27,8 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false); 
   const [isPasswordSecure, setIsPasswordSecure] = useState(true); 
   const [loading, setLoading] = useState(false);
+  const [lang, setLang] = useState('ar');
+  const t = translations[lang];
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -222,14 +225,19 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.formCard}>
-            <Text style={styles.welcomeText}>تسجيل الدخول</Text>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
+              <TouchableOpacity onPress={() => setLang(lang === 'ar' ? 'en' : 'ar')} style={styles.langSwitch}>
+                <Text style={styles.langSwitchText}>{lang === 'ar' ? 'English' : 'عربي'}</Text>
+              </TouchableOpacity>
+              <Text style={styles.welcomeText}>{t.login}</Text>
+            </View>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>اسم المستخدم</Text>
+              <Text style={styles.label}>{t.username}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput 
                   style={styles.input}
-                  placeholder="أدخل اسم المستخدم"
+                  placeholder={lang === 'ar' ? "أدخل اسم المستخدم" : "Enter username"}
                   placeholderTextColor="#94A3B8"
                   value={username}
                   onChangeText={setUsername}
@@ -239,7 +247,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>كلمة المرور</Text>
+              <Text style={styles.label}>{t.password}</Text>
               <View style={styles.passwordInputContainer}>
                 <TouchableOpacity 
                   style={styles.visibilityButton} 
@@ -251,7 +259,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
                 <TextInput 
                   style={styles.passwordField}
-                  placeholder="أدخل كلمة المرور"
+                  placeholder={lang === 'ar' ? "أدخل كلمة المرور" : "Enter password"}
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={isPasswordSecure}
                   value={password}
@@ -267,7 +275,7 @@ export default function LoginScreen() {
                 onPress={() => setRememberMe(!rememberMe)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.checkboxLabel}>تذكرني</Text>
+                <Text style={styles.checkboxLabel}>{lang === 'ar' ? 'تذكرني' : 'Remember Me'}</Text>
                 <View style={[styles.customCheckbox, rememberMe && styles.customCheckboxChecked]}>
                   {rememberMe && <Text style={styles.checkmark}>✓</Text>}
                 </View>
@@ -282,7 +290,7 @@ export default function LoginScreen() {
               {loading ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
-                <Text style={styles.loginButtonText}>دخول</Text>
+                <Text style={styles.loginButtonText}>{t.login}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -372,8 +380,20 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1E293B',
-    marginBottom: 20,
     textAlign: 'center',
+  },
+  langSwitch: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  langSwitchText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#3B82F6'
   },
   inputGroup: {
     marginBottom: 15,
