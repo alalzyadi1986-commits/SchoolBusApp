@@ -86,8 +86,14 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('remember_me_status', 'false');
       }
 
-      // 1. التحقق من Super Admin
-      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && enteredPass === 'admin123') {
+      // 1. التحقق من Super Admin من قاعدة البيانات
+      const adminRef = ref(db, 'admin_settings/super_admin');
+      const adminSnapshot = await get(adminRef);
+      const adminData = adminSnapshot.val();
+
+      // التحقق من القيمة الثابتة كاحتياط أو القيمة المخزنة
+      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && 
+          (enteredPass === 'admin123' || (adminData && enteredPass === adminData.password))) {
         const sessionData = { username: enteredUser, role: 'superadmin' };
         await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
         setLoading(false);

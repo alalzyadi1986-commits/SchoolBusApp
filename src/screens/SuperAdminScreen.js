@@ -10,10 +10,11 @@ import {
   ActivityIndicator,
   Platform,
   SafeAreaView,
-  StatusBar
+  StatusBar,
+  Modal
 } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, set, push, onValue, remove, update } from 'firebase/database';
+import { ref, set, push, onValue, remove, update, get } from 'firebase/database';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SuperAdminScreen({ navigation }) {
@@ -28,6 +29,10 @@ export default function SuperAdminScreen({ navigation }) {
   
   const [loading, setLoading] = useState(false);
   const [editingSchoolId, setEditingSchoolId] = useState(null);
+
+  // حالات لتغيير كلمة سر المدير العام
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [newAdminPass, setNewAdminPass] = useState('');
 
   // جلب المدارس من قاعدة البيانات
   useEffect(() => {
@@ -150,8 +155,30 @@ export default function SuperAdminScreen({ navigation }) {
     );
   };
 
-  const handleChangeAdminPassword = () => {
-    Alert.alert('تنبيه', 'هذه الميزة ستكون متاحة قريباً في التحديث القادم.');
+  // وظيفة تغيير كلمة سر المدير العام
+  const handleUpdateAdminPassword = async () => {
+    if (!newAdminPass) {
+      Alert.alert('تنبيه', 'يرجى إدخال كلمة السر الجديدة');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // تحديث كلمة السر في المسار المخصص لها (admin_settings)
+      const adminSettingsRef = ref(db, 'admin_settings/super_admin');
+      await set(adminSettingsRef, {
+        password: newAdminPass,
+        updatedAt: new Date().toISOString()
+      });
+      
+      Alert.alert('نجاح', 'تم تحديث كلمة سر المدير العام بنجاح');
+      setShowPassModal(false);
+      setNewAdminPass('');
+    } catch (error) {
+      Alert.alert('خطأ', 'فشل تحديث كلمة السر: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderSchoolItem = ({ item, index }) => {
@@ -193,7 +220,7 @@ export default function SuperAdminScreen({ navigation }) {
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <Text style={styles.title}>لوحة التحكم للمدير العام</Text>
-        <TouchableOpacity style={styles.changePassHeaderBtn} onPress={handleChangeAdminPassword}>
+        <TouchableOpacity style={styles.changePassHeaderBtn} onPress={() => setShowPassModal(true)}>
           <Text style={styles.changePassText}>🔐 تغيير كلمة سري</Text>
         </TouchableOpacity>
       </View>
@@ -277,12 +304,48 @@ export default function SuperAdminScreen({ navigation }) {
           </View>
         }
         ListFooterComponent={
-          <TouchableOpacity style={styles.logoutButton} onPress={() => navigation.replace('LoginScreen')}>
+          <TouchableOpacity style={styles.logoutButton} onPress={() => navigation.replace('Login')}>
             <Text style={styles.logoutButtonText}>تسجيل الخروج</Text>
           </TouchableOpacity>
         }
         contentContainerStyle={styles.listContent}
       />
+
+      {/* مودال تغيير كلمة سر المدير العام */}
+      <Modal
+        visible={showPassModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPassModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>تغيير كلمة سر المدير العام</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="أدخل كلمة السر الجديدة"
+              value={newAdminPass}
+              onChangeText={setNewAdminPass}
+              autoCapitalize="none"
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.saveBtn]} 
+                onPress={handleUpdateAdminPassword}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalBtnText}>حفظ</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.cancelBtn]} 
+                onPress={() => setShowPassModal(false)}
+              >
+                <Text style={styles.modalBtnText}>إلغاء</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -337,4 +400,13 @@ const styles = StyleSheet.create({
   
   logoutButton: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 30, borderWidth: 1, borderColor: '#FEE2E2' },
   logoutButtonText: { color: '#EF4444', fontWeight: '700', fontSize: 15 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFF', padding: 25, borderRadius: 20, width: '85%' },
+  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 20, textAlign: 'center', color: '#1E293B' },
+  modalButtons: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 },
+  modalBtn: { flex: 0.45, padding: 12, borderRadius: 10, alignItems: 'center' },
+  saveBtn: { backgroundColor: '#3B82F6' },
+  cancelBtn: { backgroundColor: '#94A3B8' },
+  modalBtnText: { color: '#FFF', fontWeight: 'bold' }
 });
