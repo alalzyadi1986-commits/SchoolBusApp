@@ -19,6 +19,7 @@ export default function SchoolScreen({ route, navigation }) {
   const [students, setStudents] = useState([]);
   const [emergencies, setEmergencies] = useState([]);
   const [reports, setReports] = useState([]);
+  const [managers, setManagers] = useState([]);
 
   // حقول الإدخال (ثابتة في أعلى الصفحة)
   const [formData, setFormData] = useState({});
@@ -55,6 +56,7 @@ export default function SchoolScreen({ route, navigation }) {
     fetchData('students', setStudents);
     fetchData('emergencies', setEmergencies);
     fetchData('reports', setReports);
+    fetchData('managers', setManagers);
     setLoading(false);
   }, [schoolId]);
 
@@ -164,7 +166,8 @@ export default function SchoolScreen({ route, navigation }) {
             { id: 'parents', label: 'الأهل' },
             { id: 'students', label: 'الطلاب' },
             { id: 'reports', label: 'التقارير' },
-            { id: 'emergencies', label: 'الطوارئ' }
+            { id: 'emergencies', label: 'الطوارئ' },
+            { id: 'managers', label: 'الإدارة' }
           ].map(tab => (
             <TouchableOpacity key={tab.id} style={[styles.tabGridItem, activeTab === tab.id && styles.activeTabGrid]} onPress={() => { setActiveTab(tab.id); setFormData({}); setEditingId(null); }}>
               <Text style={[styles.tabGridText, activeTab === tab.id && styles.activeTabGridText]}>{tab.label}</Text>
@@ -175,9 +178,9 @@ export default function SchoolScreen({ route, navigation }) {
 
       <ScrollView style={styles.content}>
         {/* قسم الإضافة الثابت في الأعلى */}
-        {['drivers', 'staff', 'parents', 'students'].includes(activeTab) && (
+        {['drivers', 'staff', 'parents', 'students', 'managers'].includes(activeTab) && (
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>{editingId ? 'تعديل البيانات' : `إضافة ${activeTab === 'drivers' ? 'سائق جديد' : activeTab === 'staff' ? 'مرافق جديد' : activeTab === 'parents' ? 'ولي أمر جديد' : 'طالب جديد'}`}</Text>
+            <Text style={styles.formTitle}>{editingId ? 'تعديل البيانات' : `إضافة ${activeTab === 'drivers' ? 'سائق جديد' : activeTab === 'staff' ? 'مرافق جديد' : activeTab === 'parents' ? 'ولي أمر جديد' : activeTab === 'students' ? 'طالب جديد' : 'مدير جديد'}`}</Text>
             
             {renderInput('الاسم الكامل', 'name')}
             {renderInput('اسم المستخدم', 'username')}
@@ -276,7 +279,8 @@ export default function SchoolScreen({ route, navigation }) {
                activeTab === 'staff' ? `قائمة المرافقين المضافين (${staff.length})` :
                activeTab === 'parents' ? `قائمة أولياء الأمور (${parents.length})` :
                activeTab === 'students' ? `قائمة الطلاب (${filteredStudents.length})` :
-               activeTab === 'reports' ? 'سجل التقارير والنشاطات' : 'بلاغات الطوارئ النشطة'}
+               activeTab === 'reports' ? 'سجل التقارير والنشاطات' :
+               activeTab === 'managers' ? `قائمة المديرين (${managers.length})` : 'بلاغات الطوارئ النشطة'}
             </Text>
           </View>
 
@@ -298,7 +302,7 @@ export default function SchoolScreen({ route, navigation }) {
 
           {(activeTab === 'reports' ? filteredReports : activeTab === 'students' ? filteredStudents : 
             activeTab === 'drivers' ? drivers : activeTab === 'staff' ? staff : 
-            activeTab === 'parents' ? parents : emergencies).map((item) => (
+            activeTab === 'parents' ? parents : activeTab === 'managers' ? managers : emergencies).map((item) => (
             <View key={item.id} style={styles.card}>
               <View style={styles.cardInfo}>
                 {activeTab === 'drivers' ? (
@@ -330,7 +334,7 @@ export default function SchoolScreen({ route, navigation }) {
                 )}
               </View>
               
-              {['drivers', 'staff', 'parents', 'students'].includes(activeTab) && (
+              {['drivers', 'staff', 'parents', 'students', 'managers'].includes(activeTab) && (
                 <View style={styles.cardActions}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => startEdit(item)}>
                     <Text style={styles.editBtnText}>تعديل</Text>
