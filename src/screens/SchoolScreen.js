@@ -104,7 +104,12 @@ export default function SchoolScreen({ route, navigation }) {
   const startEdit = (item) => {
     setFormData(item);
     setEditingId(item.id);
-    // التمرير للأعلى لرؤية حقول التعديل
+    // فتح النموذج المناسب حسب القسم الحالي
+    if (activeTab === 'drivers') setShowDriverForm(true);
+    else if (activeTab === 'staff') setShowStaffForm(true);
+    else if (activeTab === 'parents') setShowParentForm(true);
+    else if (activeTab === 'students') setShowStudentForm(true);
+    else if (activeTab === 'managers') setShowManagerForm(true);
   };
 
   const renderInput = (placeholder, field, isPassword = false, isNumeric = false) => (
@@ -187,40 +192,45 @@ export default function SchoolScreen({ route, navigation }) {
       {/* أزرار الإضافة السريعة */}
       {activeTab === 'drivers' && !showDriverForm && (
         <View style={styles.addButtonContainer}>
-          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowDriverForm(true); setFormData({}); setEditingId(null); }}>
-            <Text style={styles.addDriverBtnText}>+ إضافة سائق جديد</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { setShowDriverForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addBtnIcon}>👨‍🚗</Text>
+            <Text style={styles.addBtnText}>إضافة سائق</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {activeTab === 'staff' && !showStaffForm && (
         <View style={styles.addButtonContainer}>
-          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowStaffForm(true); setFormData({}); setEditingId(null); }}>
-            <Text style={styles.addDriverBtnText}>+ إضافة مرافق جديد</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { setShowStaffForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addBtnIcon}>👥</Text>
+            <Text style={styles.addBtnText}>إضافة مرافق</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {activeTab === 'parents' && !showParentForm && (
         <View style={styles.addButtonContainer}>
-          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowParentForm(true); setFormData({}); setEditingId(null); }}>
-            <Text style={styles.addDriverBtnText}>+ إضافة ولي أمر جديد</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { setShowParentForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addBtnIcon}>👨‍👩‍👧</Text>
+            <Text style={styles.addBtnText}>إضافة ولي أمر</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {activeTab === 'students' && !showStudentForm && (
         <View style={styles.addButtonContainer}>
-          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowStudentForm(true); setFormData({}); setEditingId(null); }}>
-            <Text style={styles.addDriverBtnText}>+ إضافة طالب جديد</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { setShowStudentForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addBtnIcon}>👨‍🎓</Text>
+            <Text style={styles.addBtnText}>إضافة طالب</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {activeTab === 'managers' && !showManagerForm && (
         <View style={styles.addButtonContainer}>
-          <TouchableOpacity style={styles.addDriverBtn} onPress={() => { setShowManagerForm(true); setFormData({}); setEditingId(null); }}>
-            <Text style={styles.addDriverBtnText}>+ إضافة مدير جديد</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { setShowManagerForm(true); setFormData({}); setEditingId(null); }}>
+            <Text style={styles.addBtnIcon}>👨‍💼</Text>
+            <Text style={styles.addBtnText}>إضافة مدير</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -239,9 +249,13 @@ export default function SchoolScreen({ route, navigation }) {
             
             {/* قائمة السرعة */}
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>السرعة القصوى المسموحة (كم/س):</Text>
+              <Text style={styles.inputLabel}>السرعة القصوى المسموحة:</Text>
               <TouchableOpacity style={styles.speedPickerBtn} onPress={() => setShowSpeedPicker(true)}>
-                <Text style={styles.speedPickerText}>{formData.max_speed ? (formData.max_speed === 'بدون تحديد' ? 'بدون تحديد' : `${formData.max_speed} كم/س`) : 'اختر السرعة'}</Text>
+                <View style={styles.speedDisplayBox}>
+                  <Text style={styles.speedDisplayText}>
+                    {formData.max_speed ? (formData.max_speed === 'بدون تحديد' ? 'بدون تحديد' : `${formData.max_speed} كم/س`) : 'اضغط لاختيار'}
+                  </Text>
+                </View>
                 <Text style={styles.speedPickerArrow}>▼</Text>
               </TouchableOpacity>
             </View>
@@ -596,4 +610,42 @@ const styles = StyleSheet.create({
   deleteBtn: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8, backgroundColor: '#FEE2E2' },
   deleteBtnText: { color: '#EF4444', fontWeight: 'bold', fontSize: 13 },
   reportFilter: { marginBottom: 15, padding: 12, backgroundColor: '#FFF', borderRadius: 12, elevation: 2 }
-});
+,
+  addBtn: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 15,
+    marginVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  addBtnIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  addBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  speedDisplayBox: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  speedDisplayText: {
+    fontSize: 15,
+    color: '#1F2937',
+    fontWeight: '500',
+  }});
