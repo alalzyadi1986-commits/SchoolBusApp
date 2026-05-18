@@ -48,6 +48,13 @@ export default function LoginScreen() {
     }
   };
 
+  const isSubscriptionActive = (endDate) => {
+    if (!endDate) return false;
+    const today = new Date();
+    const expiry = new Date(endDate);
+    return expiry > today;
+  };
+
   const navigateToDashboard = (userRole, userData, schoolId) => {
     const params = { schoolId, user: userData };
     
@@ -91,9 +98,10 @@ export default function LoginScreen() {
       const adminSnapshot = await get(adminRef);
       const adminData = adminSnapshot.val();
 
-      // التحقق من القيمة الثابتة كاحتياط أو القيمة المخزنة
-      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && 
-          (enteredPass === 'admin123' || (adminData && enteredPass === adminData.password))) {
+      // إذا كانت هناك كلمة سر مخزنة، نستخدمها هي فقط. وإلا نستخدم الافتراضية.
+      const correctAdminPass = adminData ? adminData.password : 'admin123';
+
+      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && enteredPass === correctAdminPass) {
         const sessionData = { username: enteredUser, role: 'superadmin' };
         await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
         setLoading(false);
@@ -109,13 +117,35 @@ export default function LoginScreen() {
       if (allSchools) {
         for (const schoolId in allSchools) {
           const schoolData = allSchools[schoolId];
+          const active = isSubscriptionActive(schoolData.endDate);
 
+          // أ- التحقق من مدير المدرسة (يسمح له بالدخول حتى لو منتهي للمشاهدة)
           if (schoolData.email === enteredUser && schoolData.password === enteredPass) {
             const sessionData = { ...schoolData, id: schoolId, role: 'school' };
             await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
             setLoading(false);
             navigateToDashboard('school', sessionData, schoolId);
             return;
+          }
+
+          // ب- التحقق من الأدوار الأخرى (يمنعون إذا كان الاشتراك منتهياً)
+          if (!active) {
+            // فحص إذا كان المستخدم ينتمي لهذه المدرسة المنتهية لإظهار تنبيه مخصص
+            let belongsToThisSchool = false;
+            if (schoolData.drivers && schoolData.drivers[enteredUser]) belongsToThisSchool = true;
+            if (schoolData.staff && schoolData.staff[enteredUser]) belongsToThisSchool = true;
+            if (schoolData.parents && schoolData.parents[enteredUser]) belongsToThisSchool = true;
+
+            if (belongsToThisSchool && (
+                (schoolData.drivers && schoolData.drivers[enteredUser]?.password === enteredPass) ||
+                (schoolData.staff && schoolData.staff[enteredUser]?.password === enteredPass) ||
+                (schoolData.parents && schoolData.parents[enteredUser]?.password === enteredPass)
+            )) {
+              setLoading(false);
+              Alert.alert('اشتراك منتهي', 'عذراً، اشتراك المدرسة منتهي. يرجى مراجعة إدارة المدرسة للتجديد.');
+              return;
+            }
+            continue; // تخطي هذه المدرسة لأنها منتهية
           }
 
           if (schoolData.drivers) {

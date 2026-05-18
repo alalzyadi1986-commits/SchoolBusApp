@@ -9,12 +9,12 @@ import {
   Alert, 
   ActivityIndicator,
   Platform,
-  SafeAreaView,
   StatusBar,
   Modal
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../firebaseConfig';
-import { ref, set, push, onValue, remove, update, get } from 'firebase/database';
+import { ref, set, push, onValue, remove, update } from 'firebase/database';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SuperAdminScreen({ navigation }) {
@@ -155,7 +155,6 @@ export default function SuperAdminScreen({ navigation }) {
     );
   };
 
-  // وظيفة تغيير كلمة سر المدير العام
   const handleUpdateAdminPassword = async () => {
     if (!newAdminPass) {
       Alert.alert('تنبيه', 'يرجى إدخال كلمة السر الجديدة');
@@ -164,7 +163,6 @@ export default function SuperAdminScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // تحديث كلمة السر في المسار المخصص لها (admin_settings)
       const adminSettingsRef = ref(db, 'admin_settings/super_admin');
       await set(adminSettingsRef, {
         password: newAdminPass,
@@ -219,10 +217,17 @@ export default function SuperAdminScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <Text style={styles.title}>لوحة التحكم للمدير العام</Text>
-        <TouchableOpacity style={styles.changePassHeaderBtn} onPress={() => setShowPassModal(true)}>
-          <Text style={styles.changePassText}>🔐 تغيير كلمة سري</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <Text style={styles.title}>لوحة التحكم</Text>
+        </View>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.logoutHeaderBtn} onPress={() => navigation.replace('Login')}>
+            <Text style={styles.logoutText}>🚪 خروج</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.changePassHeaderBtn} onPress={() => setShowPassModal(true)}>
+            <Text style={styles.changePassText}>🔐 كلمة سري</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -303,19 +308,13 @@ export default function SuperAdminScreen({ navigation }) {
             )}
           </View>
         }
-        ListFooterComponent={
-          <TouchableOpacity style={styles.logoutButton} onPress={() => navigation.replace('Login')}>
-            <Text style={styles.logoutButtonText}>تسجيل الخروج</Text>
-          </TouchableOpacity>
-        }
         contentContainerStyle={styles.listContent}
       />
 
-      {/* مودال تغيير كلمة سر المدير العام */}
       <Modal
         visible={showPassModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowPassModal(false)}
       >
         <View style={styles.modalOverlay}>
@@ -353,15 +352,22 @@ export default function SuperAdminScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
   header: { 
-    padding: 20, 
+    padding: 15, 
     backgroundColor: '#FFF', 
     flexDirection: 'row-reverse', 
     justifyContent: 'space-between', 
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0'
+    borderBottomColor: '#E2E8F0',
+    elevation: 2
   },
+  headerRight: { flexDirection: 'row-reverse', alignItems: 'center' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
+  
+  logoutHeaderBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8, marginRight: 8 },
+  logoutText: { fontSize: 12, color: '#EF4444', fontWeight: '700' },
+  
   changePassHeaderBtn: { padding: 8, backgroundColor: '#F1F5F9', borderRadius: 8 },
   changePassText: { fontSize: 12, color: '#3B82F6', fontWeight: '600' },
   
@@ -397,9 +403,6 @@ const styles = StyleSheet.create({
   editButton: { backgroundColor: '#F1F5F9', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8, marginRight: 10 },
   deleteButton: { backgroundColor: '#FEE2E2', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
   actionText: { fontSize: 12, fontWeight: '700', color: '#3B82F6' },
-  
-  logoutButton: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 30, borderWidth: 1, borderColor: '#FEE2E2' },
-  logoutButtonText: { color: '#EF4444', fontWeight: '700', fontSize: 15 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#FFF', padding: 25, borderRadius: 20, width: '85%' },
