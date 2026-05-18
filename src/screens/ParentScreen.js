@@ -58,7 +58,7 @@ export default function ParentScreen() {
                 if (myLocation) {
                   const dist = calculateDistance(busData.latitude, busData.longitude, myLocation.latitude, myLocation.longitude);
                   if (dist < alertMinutes * 0.5 && !notified && myStudent.status !== 'absent_today') {
-                    Alert.alert("تنبيه 🚌", `باص ${myStudent.name} يقترب! سيصل خلال ${alertMinutes} دقائق تقريباً`);
+                    Alert.alert("🔔 تنبيه هام 🚌", `باص ${myStudent.name} يقترب من موقعك! يرجى تجهيز الطالب للركوب، سيصل خلال ${alertMinutes} دقائق تقريباً.`);
                     setNotified(true);
                   }
                 }
