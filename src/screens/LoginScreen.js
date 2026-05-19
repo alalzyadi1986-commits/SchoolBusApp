@@ -22,6 +22,7 @@ import { translations } from '../i18n';
 const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
+  const navigation = useNavigation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false); 
@@ -29,7 +30,6 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [lang, setLang] = useState('ar');
   const t = translations[lang];
-  const navigation = useNavigation();
 
   useEffect(() => {
     loadSavedCredentials();
@@ -38,12 +38,10 @@ export default function LoginScreen() {
   const loadSavedCredentials = async () => {
     try {
       const savedUser = await AsyncStorage.getItem('remembered_username');
-      const savedPass = await AsyncStorage.getItem('remembered_password');
       const isRemembered = await AsyncStorage.getItem('remember_me_status');
 
-      if (isRemembered === 'true' && savedUser && savedPass) {
+      if (isRemembered === 'true' && savedUser) {
         setUsername(savedUser);
-        setPassword(savedPass);
         setRememberMe(true);
       }
     } catch (error) {
@@ -67,9 +65,9 @@ export default function LoginScreen() {
       navigation.replace('SchoolScreen', params);
     } else if (userRole === 'driver') {
       navigation.replace('DriverScreen', params);
-    } else if (userRole === 'attendant' || userRole === 'staff') {
+    } else if (userRole === 'staff') {
       navigation.replace('StaffScreen', params);
-    } else {
+    } else if (userRole === 'parent') {
       navigation.replace('ParentScreen', params);
     }
   };
@@ -88,7 +86,6 @@ export default function LoginScreen() {
     try {
       if (rememberMe) {
         await AsyncStorage.setItem('remembered_username', enteredUser);
-        await AsyncStorage.setItem('remembered_password', enteredPass);
         await AsyncStorage.setItem('remember_me_status', 'true');
       } else {
         await AsyncStorage.removeItem('remembered_username');
@@ -96,12 +93,11 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('remember_me_status', 'false');
       }
 
-      // 1. التحقق من Super Admin من قاعدة البيانات
+      // 1. التحقق من Super Admin
       const adminRef = ref(db, 'admin_settings/super_admin');
       const adminSnapshot = await get(adminRef);
       const adminData = adminSnapshot.val();
 
-      // إذا كانت هناك كلمة سر مخزنة، نستخدمها هي فقط. وإلا نستخدم الافتراضية.
       const correctAdminPass = adminData ? adminData.password : 'admin123';
 
       if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && enteredPass === correctAdminPass) {
@@ -112,7 +108,7 @@ export default function LoginScreen() {
         return;
       }
 
-      // 2. جلب جميع المدارس للبحث فيها
+      // 2. جلب المدارس
       const schoolsRef = ref(db, 'schools');
       const snapshot = await get(schoolsRef);
       const allSchools = snapshot.val();
@@ -122,7 +118,7 @@ export default function LoginScreen() {
           const schoolData = allSchools[schoolId];
           const active = isSubscriptionActive(schoolData.endDate);
 
-          // أ- التحقق من مدير المدرسة (يسمح له بالدخول حتى لو منتهي للمشاهدة)
+          // مدير المدرسة
           if (schoolData.email === enteredUser && schoolData.password === enteredPass) {
             const sessionData = { ...schoolData, id: schoolId, role: 'school' };
             await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
@@ -131,26 +127,21 @@ export default function LoginScreen() {
             return;
           }
 
-          // ب- التحقق من الأدوار الأخرى (يمنعون إذا كان الاشتراك منتهياً)
           if (!active) {
-            // فحص إذا كان المستخدم ينتمي لهذه المدرسة المنتهية لإظهار تنبيه مخصص
             let belongsToThisSchool = false;
             if (schoolData.drivers && schoolData.drivers[enteredUser]) belongsToThisSchool = true;
             if (schoolData.staff && schoolData.staff[enteredUser]) belongsToThisSchool = true;
             if (schoolData.parents && schoolData.parents[enteredUser]) belongsToThisSchool = true;
 
-            if (belongsToThisSchool && (
-                (schoolData.drivers && schoolData.drivers[enteredUser]?.password === enteredPass) ||
-                (schoolData.staff && schoolData.staff[enteredUser]?.password === enteredPass) ||
-                (schoolData.parents && schoolData.parents[enteredUser]?.password === enteredPass)
-            )) {
+            if (belongsToThisSchool) {
               setLoading(false);
               Alert.alert('اشتراك منتهي', 'عذراً، اشتراك المدرسة منتهي. يرجى مراجعة إدارة المدرسة للتجديد.');
               return;
             }
-            continue; // تخطي هذه المدرسة لأنها منتهية
+            continue;
           }
 
+          // Drivers
           if (schoolData.drivers) {
             for (const driverKey in schoolData.drivers) {
               const driver = schoolData.drivers[driverKey];
@@ -164,6 +155,7 @@ export default function LoginScreen() {
             }
           }
 
+          // Staff
           if (schoolData.staff) {
             for (const staffKey in schoolData.staff) {
               const staff = schoolData.staff[staffKey];
@@ -177,6 +169,7 @@ export default function LoginScreen() {
             }
           }
 
+          // Parents
           if (schoolData.parents) {
             for (const parentKey in schoolData.parents) {
               const parent = schoolData.parents[parentKey];

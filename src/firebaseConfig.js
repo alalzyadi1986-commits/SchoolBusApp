@@ -1,21 +1,31 @@
-import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { initializeApp } from 'firebase/app';
+import { getDatabase } from 'firebase/database';
+
+// ======================
+// تحذير أمان مهم:
+// ======================
+// هذا الملف يحتوي على apiKey عام (عادي في Expo)
+// لكن يجب حماية قاعدة البيانات من خلال Firebase Security Rules
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDdhs4ACBNXnevRYULA5M8J9I73LFAqsik",
-  authDomain: "schoolbustracker0.firebaseapp.com",
-  projectId: "schoolbustracker0",
-  storageBucket: "schoolbustracker0.firebasestorage.app",
-  messagingSenderId: "1074397478833",
-  appId: "1:1074397478833:web:b267c23f1d56aa72b54790"
+  apiKey: "AIzaSyD9oN6vQ0Z8fKz9vL5mX7pR2tY8uV3wX9z", // يمكن أن يكون عام
+  authDomain: "schoolbusapp-XXXX.firebaseapp.com",
+  databaseURL: "https://schoolbusapp-XXXX-default-rtdb.firebaseio.com",
+  projectId: "schoolbusapp-XXXX",
+  storageBucket: "schoolbusapp-XXXX.appspot.com",
+  messagingSenderId: "XXXXXXXXXXXX",
+  appId: "1:XXXXXXXXXXXX:web:XXXXXXXXXXXXXXXX"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getDatabase(app);
+const db = getDatabase(app);
 
-// إعداد المصادقة مع خاصية حفظ الجلسة في ذاكرة الهاتف
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+export { db };
+
+// ======================
+// ملاحظات أمان (لك فقط):
+// ======================
+// 1. غير databaseURL إلى مشروعك الحقيقي
+// 2. يجب إعداد Firebase Security Rules لاحقاً
+// 3. لا تضع كلمات سر أو بيانات حساسة هنا
