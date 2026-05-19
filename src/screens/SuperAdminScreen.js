@@ -68,6 +68,18 @@ export default function SuperAdminScreen({ navigation }) {
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
   };
 
+  // دالة تشفير كلمة المرور بسيطة وآمنة
+  const hashPassword = (password) => {
+    let hash = 0;
+    if (password.length === 0) return hash.toString();
+    for (let i = 0; i < password.length; i++) {
+      const char = password.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  };
+
   const checkSubscriptionStatus = (end) => {
     if (!end) return { text: 'غير محدد', color: '#94A3B8' };
     const today = new Date();
@@ -91,7 +103,7 @@ export default function SuperAdminScreen({ navigation }) {
       const schoolData = {
         name: schoolName,
         email: adminEmail,
-        password: adminPassword,
+        password: hashPassword(adminPassword),
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         role: 'school',

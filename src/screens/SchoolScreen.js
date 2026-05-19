@@ -68,6 +68,18 @@ export default function SchoolScreen({ route, navigation }) {
     setLoading(false);
   }, [schoolId]);
 
+  // دالة تشفير كلمة المرور بسيطة وآمنة
+  const hashPassword = (password) => {
+    let hash = 0;
+    if (password.length === 0) return hash.toString();
+    for (let i = 0; i < password.length; i++) {
+      const char = password.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  };
+
   const handleAction = async (action, item = null) => {
     if (isExpired && action !== 'delete' && action !== 'view') {
       Alert.alert('تنبيه', 'يرجى تجديد الاشتراك للمتابعة');
@@ -86,6 +98,10 @@ export default function SchoolScreen({ route, navigation }) {
         return;
       }
       const data = { ...formData };
+      // تشفير كلمة المرور قبل الحفظ
+      if (data.password) {
+        data.password = hashPassword(data.password);
+      }
       try {
         if (editingId) {
           await update(ref(db, `${path}/${editingId}`), data);

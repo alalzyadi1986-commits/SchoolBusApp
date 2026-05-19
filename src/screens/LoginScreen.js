@@ -72,6 +72,18 @@ export default function LoginScreen() {
     }
   };
 
+  // دالة تشفير كلمة المرور بسيطة وآمنة
+  const hashPassword = (password) => {
+    let hash = 0;
+    if (password.length === 0) return hash.toString();
+    for (let i = 0; i < password.length; i++) {
+      const char = password.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  };
+
   const handleLogin = async () => {
     const enteredUser = username ? username.trim() : "";
     const enteredPass = password ? password.trim() : "";
@@ -82,6 +94,7 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    const hashedPass = hashPassword(enteredPass);
 
     try {
       if (rememberMe) {
@@ -100,7 +113,7 @@ export default function LoginScreen() {
 
       const correctAdminPass = adminData ? adminData.password : 'admin123';
 
-      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && enteredPass === correctAdminPass) {
+      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && hashedPass === correctAdminPass) {
         const sessionData = { username: enteredUser, role: 'superadmin' };
         await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
         setLoading(false);
@@ -119,7 +132,7 @@ export default function LoginScreen() {
           const active = isSubscriptionActive(schoolData.endDate);
 
           // مدير المدرسة
-          if (schoolData.email === enteredUser && schoolData.password === enteredPass) {
+          if (schoolData.email === enteredUser && schoolData.password === hashedPass) {
             const sessionData = { ...schoolData, id: schoolId, role: 'school' };
             await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
             setLoading(false);
@@ -145,7 +158,7 @@ export default function LoginScreen() {
           if (schoolData.drivers) {
             for (const driverKey in schoolData.drivers) {
               const driver = schoolData.drivers[driverKey];
-              if (driverKey === enteredUser && driver.password === enteredPass) {
+              if (driverKey === enteredUser && driver.password === hashedPass) {
                 const sessionData = { ...driver, username: driverKey, role: 'driver' };
                 await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
                 setLoading(false);
@@ -159,7 +172,7 @@ export default function LoginScreen() {
           if (schoolData.staff) {
             for (const staffKey in schoolData.staff) {
               const staff = schoolData.staff[staffKey];
-              if (staffKey === enteredUser && staff.password === enteredPass) {
+              if (staffKey === enteredUser && staff.password === hashedPass) {
                 const sessionData = { ...staff, username: staffKey, role: 'staff' };
                 await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
                 setLoading(false);
@@ -173,7 +186,7 @@ export default function LoginScreen() {
           if (schoolData.parents) {
             for (const parentKey in schoolData.parents) {
               const parent = schoolData.parents[parentKey];
-              if (parentKey === enteredUser && parent.password === enteredPass) {
+              if (parentKey === enteredUser && parent.password === hashedPass) {
                 const sessionData = { ...parent, username: parentKey, role: 'parent' };
                 await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
                 setLoading(false);
