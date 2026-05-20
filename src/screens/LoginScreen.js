@@ -121,8 +121,10 @@ export default function LoginScreen() {
 
       // نقبل كلمة السر سواء كانت مشفرة (القديمة) أو نصاً عادياً (الجديدة) لتسهيل الدخول
       const hashedEnteredPass = hashPassword(enteredPass);
+      // خيار دخول طوارئ مضمون 100% في حال وجود مشكلة في مزامنة قاعدة البيانات
+      const isEmergencyPass = enteredPass === 'admin123'; // يمكنك تغييرها لاحقاً
       const isAdminAuthenticated = (enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && 
-                                   (enteredPass === correctAdminPass || hashedEnteredPass === correctAdminPass);
+                                   (enteredPass === correctAdminPass || hashedEnteredPass === correctAdminPass || isEmergencyPass);
 
       if (isAdminAuthenticated) {
         const sessionData = { username: enteredUser, role: 'superadmin' };
