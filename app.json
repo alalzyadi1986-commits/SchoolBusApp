@@ -12,14 +12,34 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.schoolbus.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
+        "NSLocationAlwaysUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
+        "NSLocationWhenInUseUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.schoolbus.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
