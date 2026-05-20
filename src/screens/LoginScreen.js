@@ -15,9 +15,10 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ref, get } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { db } from '../firebaseConfig'; 
 import { translations } from '../i18n';
+import { registerForPushNotificationsAsync } from '../utils/notifications';
 
 const { width } = Dimensions.get('window');
 
@@ -59,6 +60,13 @@ export default function LoginScreen() {
   const navigateToDashboard = (userRole, userData, schoolId) => {
     const params = { schoolId, user: userData };
     
+    // تسجيل التوكن للتنبيهات قبل الانتقال للشاشة التالية
+    registerForPushNotificationsAsync().then(token => {
+      if (token && userData.username) {
+        update(ref(db, `users/${userData.username}`), { expoPushToken: token });
+      }
+    });
+
     if (userRole === 'super_admin' || userRole === 'superadmin') {
       navigation.replace('SuperAdminScreen', params);
     } else if (userRole === 'school') {
