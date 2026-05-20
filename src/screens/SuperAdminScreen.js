@@ -177,7 +177,7 @@ export default function SuperAdminScreen({ navigation }) {
     try {
       const adminSettingsRef = ref(db, 'admin_settings/super_admin');
       await set(adminSettingsRef, {
-        password: newAdminPass,
+        password: hashPassword(newAdminPass),
         updatedAt: new Date().toISOString()
       });
       
