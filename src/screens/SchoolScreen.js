@@ -135,7 +135,7 @@ export default function SchoolScreen({ route, navigation }) {
         placeholder={placeholder}
         value={formData[field] || ''}
         onChangeText={(txt) => setFormData({ ...formData, [field]: txt })}
-        secureTextEntry={isPassword}
+        secureTextEntry={false} // تم الإلغاء بناءً على طلبك لرؤية كلمة السر بوضوح
         keyboardType={isNumeric ? 'numeric' : 'default'}
         editable={field === 'username' ? !editingId : true}
       />
@@ -539,7 +539,7 @@ export default function SchoolScreen({ route, navigation }) {
                   <>
                     <Text style={styles.cardName}>{item.name}</Text>
                     <Text style={styles.cardSub}>
-                      {activeTab === 'students' ? `الصف: ${item.class} - شعبة: ${item.section}` : `الهاتف: ${item.phone}`}
+                      {activeTab === 'students' ? `الصف: ${item.class} - شعبة: ${item.section}` : `الهاتف: ${item.phone}${item.password ? ` | كلمة السر: ${item.password}` : ''}`}
                     </Text>
                   </>
                 )}
