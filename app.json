@@ -42,7 +42,7 @@
       ]
     },
     "notification": {
-      "icon": "./assets/notification-icon.png",
+      "icon": "./assets/icon.png",
       "color": "#3B82F6"
     },
     "web": {
