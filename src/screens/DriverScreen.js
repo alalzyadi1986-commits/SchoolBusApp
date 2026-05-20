@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ref, onValue, update, push, set } from "firebase/database";
 import { db } from '../firebaseConfig';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
+const LOCATION_TASK_NAME = 'background-location-task';
 
 export default function DriverScreen() {
   const route = useRoute();
@@ -21,11 +24,13 @@ export default function DriverScreen() {
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [speedAlertSent, setSpeedAlertSent] = useState(false);
   
-  const locationSubscription = useRef(null);
   const stopTimers = useRef({}); // لتتبع وقت توقف الباص عند كل منزل
 
   useEffect(() => {
     if (!schoolId || !user?.username) return;
+
+    // حفظ بيانات الجلسة لاستخدامها في مهمة الخلفية
+    AsyncStorage.setItem('background_session', JSON.stringify({ schoolId, user }));
 
     const studentsRef = ref(db, `schools/${schoolId}/students`);
     const unsubscribeStudents = onValue(studentsRef, (snapshot) => {
@@ -41,101 +46,60 @@ export default function DriverScreen() {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
+        await Location.requestBackgroundPermissionsAsync();
         let loc = await Location.getCurrentPositionAsync({});
         setCurrentLoc(loc.coords);
       }
+      
+      // التحقق إذا كانت المهمة تعمل بالفعل
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+      setIsTripActive(hasStarted);
     })();
 
-    return () => { unsubscribeStudents(); stopTracking(); };
+    return () => { unsubscribeStudents(); };
   }, [schoolId, user]);
 
   const startTrip = async () => {
     if (user?.permissions && !user.permissions.canStartTrip) { Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية بدء الرحلة'); return; }
-    setIsTripActive(true);
-    locationSubscription.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
-      (loc) => {
-        const { latitude, longitude, speed } = loc.coords;
-        const speedKmH = Math.max(0, Math.round((speed || 0) * 3.6));
-        setCurrentLoc(loc.coords);
-        setCurrentSpeed(speedKmH);
+    
+    const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+    if (foregroundStatus !== 'granted') { Alert.alert('خطأ', 'يجب السماح بالوصول للموقع'); return; }
+    
+    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+    if (backgroundStatus !== 'granted') {
+      Alert.alert('تنبيه', 'للتتبع في الخلفية، يرجى اختيار "السماح دائماً" في إعدادات الموقع');
+    }
 
-        // تحديث الموقع في Firebase
-        update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
-          latitude, longitude, speed: speedKmH,
-          updatedAt: new Date().toISOString(), driverName: user.name,
-          busNumber: user.bus_number, isActive: true
-        });
-
-        // 1. مراقبة السرعة
-        const maxSpeedAllowed = parseInt(user.max_speed || 80);
-        if (speedKmH > maxSpeedAllowed && !speedAlertSent) {
-          sendSpeedAlert(speedKmH);
-          setSpeedAlertSent(true);
-        } else if (speedKmH <= maxSpeedAllowed) {
-          setSpeedAlertSent(false);
-        }
-
-        // 2. نظام التحضير التلقائي (التوقف لمدة 10 ثوانٍ عند منزل الطالب)
-        if (speedKmH < 5) { // الباص متوقف أو يتحرك ببطء شديد
-          checkAutoAttendance(latitude, longitude);
-        } else {
-          stopTimers.current = {};
-        }
+    await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+      accuracy: Location.Accuracy.High,
+      distanceInterval: 5,
+      timeInterval: 5000,
+      foregroundService: {
+        notificationTitle: "تطبيق الباص يعمل",
+        notificationBody: "يتم تتبع موقع الباص حالياً لإبلاغ الأهالي",
+        notificationColor: "#3B82F6"
       }
-    );
+    });
+
+    setIsTripActive(true);
+    Alert.alert('تم البدء', 'بدأت الرحلة والتتبع يعمل الآن حتى لو أغلق التطبيق');
   };
 
-  const stopTracking = () => {
-    if (locationSubscription.current) { locationSubscription.current.remove(); locationSubscription.current = null; }
-    if (schoolId && user?.username) { update(ref(db, `schools/${schoolId}/bus/${user.username}`), { isActive: false, updatedAt: new Date().toISOString() }); }
+  const stopTracking = async () => {
+    const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+    if (hasStarted) {
+      await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+    }
+    
+    if (schoolId && user?.username) { 
+      update(ref(db, `schools/${schoolId}/bus/${user.username}`), { 
+        isActive: false, 
+        updatedAt: new Date().toISOString() 
+      }); 
+    }
     setIsTripActive(false);
     setCurrentSpeed(0);
-  };
-
-  const sendSpeedAlert = async (speed) => {
-    const reportRef = ref(db, `schools/${schoolId}/reports`);
-    const newReport = push(reportRef);
-    await set(newReport, {
-      type: 'speed',
-      timestamp: new Date().toISOString(),
-      message: `تنبيه: السائق ${user.name} تجاوز السرعة المحددة (${user.max_speed} كم/س) حيث بلغت سرعته الحالية ${speed} كم/س.`,
-      driverId: user.username
-    });
-  };
-
-  const checkAutoAttendance = (lat, lon) => {
-    students.forEach(student => {
-      if (student.status === 'pending' && student.latitude && student.longitude) {
-        const dist = calculateDistance(lat, lon, student.latitude, student.longitude);
-        if (dist < 0.05) { // المسافة أقل من 50 متر
-          const now = Date.now();
-          if (!stopTimers.current[student.id]) {
-            stopTimers.current[student.id] = now;
-          } else if (now - stopTimers.current[student.id] >= 10000) { // توقف لمدة 10 ثوانٍ
-            markStudentPresent(student);
-            delete stopTimers.current[student.id];
-          }
-        }
-      }
-    });
-  };
-
-  const markStudentPresent = async (student) => {
-    await update(ref(db, `schools/${schoolId}/students/${student.id}`), {
-      status: 'present',
-      presentAt: new Date().toISOString()
-    });
-    
-    const reportRef = ref(db, `schools/${schoolId}/reports`);
-    const newReport = push(reportRef);
-    await set(newReport, {
-      type: 'attendance',
-      timestamp: new Date().toISOString(),
-      message: `تحضير تلقائي: الطالب ${student.name} صعد الباص (توقف السائق ${user.name} عند الموقع لمدة 10 ثوانٍ).`,
-      driverId: user.username,
-      studentId: student.id
-    });
+    Alert.alert('تم الإنهاء', 'تم إيقاف الرحلة وتتبع الموقع');
   };
 
   const sendEmergency = () => {
@@ -162,14 +126,6 @@ export default function DriverScreen() {
       else Alert.alert('خطأ', 'رقم ولي الأمر غير متوفر');
     }, { onlyOnce: true });
   };
-
-  function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  }
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
@@ -228,6 +184,43 @@ export default function DriverScreen() {
     </SafeAreaView>
   );
 }
+
+// تعريف مهمة الخلفية خارج المكون
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+  if (error) {
+    console.error("Background Task Error:", error);
+    return;
+  }
+  if (data) {
+    const { locations } = data;
+    const location = locations[0];
+    if (location) {
+      try {
+        const sessionStr = await AsyncStorage.getItem('background_session');
+        if (sessionStr) {
+          const { schoolId, user } = JSON.parse(sessionStr);
+          const { latitude, longitude, speed } = location.coords;
+          const speedKmH = Math.max(0, Math.round((speed || 0) * 3.6));
+
+          // تحديث Firebase مباشرة من الخلفية
+          // ملاحظة: نحتاج لاستيراد db و ref هنا أيضاً إذا لم تكن متاحة في النطاق
+          const { ref, update } = require("firebase/database");
+          const { db } = require("../firebaseConfig");
+
+          update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+            latitude,
+            longitude,
+            speed: speedKmH,
+            updatedAt: new Date().toISOString(),
+            isActive: true
+          });
+        }
+      } catch (err) {
+        console.error("Error updating background location:", err);
+      }
+    }
+  }
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },

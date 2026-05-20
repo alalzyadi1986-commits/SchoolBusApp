@@ -1,23 +1,13 @@
 {
   "expo": {
     "name": "SchoolBusApp",
-<<<<<<< HEAD
-    "slug": "schoolbustracker0",
-=======
     "slug": "schoolbusapp",
->>>>>>> 3c2a9f5ffce5ca49b78164e4e76b8431d054c77c
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-<<<<<<< HEAD
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-=======
     "splash": {
       "image": "./assets/splash.png",
->>>>>>> 3c2a9f5ffce5ca49b78164e4e76b8431d054c77c
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -49,12 +39,7 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "NOTIFICATIONS"
-<<<<<<< HEAD
-      ],
-      "edgeToEdgeEnabled": true
-=======
       ]
->>>>>>> 3c2a9f5ffce5ca49b78164e4e76b8431d054c77c
     },
     "notification": {
       "icon": "./assets/notification-icon.png",
