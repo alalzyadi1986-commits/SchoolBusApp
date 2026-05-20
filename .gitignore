@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # dependencies
 node_modules/
 
@@ -38,6 +37,3 @@ yarn-error.*
 # generated native folders
 /ios
 /android
-=======
-node_modules/
->>>>>>> 3c2a9f5ffce5ca49b78164e4e76b8431d054c77c
