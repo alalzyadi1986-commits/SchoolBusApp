@@ -103,7 +103,7 @@ export default function SuperAdminScreen({ navigation }) {
       const schoolData = {
         name: schoolName,
         email: adminEmail,
-        password: hashPassword(adminPassword),
+        password: adminPassword,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         role: 'school',
@@ -177,7 +177,7 @@ export default function SuperAdminScreen({ navigation }) {
     try {
       const adminSettingsRef = ref(db, 'admin_settings/super_admin');
       await set(adminSettingsRef, {
-        password: hashPassword(newAdminPass),
+        password: newAdminPass,
         updatedAt: new Date().toISOString()
       });
       

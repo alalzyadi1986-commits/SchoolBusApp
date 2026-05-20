@@ -98,10 +98,9 @@ export default function SchoolScreen({ route, navigation }) {
         return;
       }
       const data = { ...formData };
-      // تشفير كلمة المرور قبل الحفظ
-      if (data.password) {
-        data.password = hashPassword(data.password);
-      }
+      // حفظ كلمة المرور كما هي (نص عادي) بناءً على طلب المستخدم
+      // لا يتم التشفير هنا لتبقى ظاهرة في لوحة التحكم
+
       try {
         if (editingId) {
           await update(ref(db, `${path}/${editingId}`), data);
