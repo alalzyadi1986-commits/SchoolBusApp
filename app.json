@@ -37,8 +37,13 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "NOTIFICATIONS"
       ]
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#3B82F6"
     },
     "web": {
       "favicon": "./assets/favicon.png"
