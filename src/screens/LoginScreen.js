@@ -119,7 +119,12 @@ export default function LoginScreen() {
 
       const correctAdminPass = adminData ? adminData.password : 'admin123';
 
-      if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && enteredPass === correctAdminPass) {
+      // نقبل كلمة السر سواء كانت مشفرة (القديمة) أو نصاً عادياً (الجديدة) لتسهيل الدخول
+      const hashedEnteredPass = hashPassword(enteredPass);
+      const isAdminAuthenticated = (enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && 
+                                   (enteredPass === correctAdminPass || hashedEnteredPass === correctAdminPass);
+
+      if (isAdminAuthenticated) {
         const sessionData = { username: enteredUser, role: 'superadmin' };
         await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
         setLoading(false);
