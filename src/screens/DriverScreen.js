@@ -101,10 +101,36 @@ export default function DriverScreen() {
     }
     
     if (schoolId && user?.username) { 
-      update(ref(db, `schools/${schoolId}/bus/${user.username}`), { 
+      // جلب الموقع الحالي عند الإغلاق اليدوي للتوثيق
+      let closeLocation = "Unknown";
+      let distToSchool = "N/A";
+      try {
+        const loc = await Location.getCurrentPositionAsync({});
+        closeLocation = `${loc.coords.latitude},${loc.coords.longitude}`;
+        if (schoolLoc) {
+          const { calculateDistance } = require("../utils/geo");
+          distToSchool = calculateDistance(loc.coords.latitude, loc.coords.longitude, schoolLoc.latitude, schoolLoc.longitude).toFixed(2);
+        }
+      } catch (e) {}
+
+      await update(ref(db, `schools/${schoolId}/bus/${user.username}`), { 
         isActive: false, 
-        updatedAt: new Date().toISOString() 
-      }); 
+        updatedAt: new Date().toISOString(),
+        terminationType: 'manual',
+        terminationDistance: distToSchool,
+        terminationCoords: closeLocation
+      });
+
+      // إضافة سجل للتقرير لكشف التلاعب
+      if (distToSchool !== "N/A" && parseFloat(distToSchool) > 0.2) {
+        const reportRef = push(ref(db, `schools/${schoolId}/reports`));
+        await set(reportRef, {
+          type: 'termination_alert',
+          driverId: user.username,
+          message: `تنبيه: السائق ${user.name} أنهى الرحلة يدوياً وهو على بعد ${distToSchool} كم من المدرسة.`,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
     setIsTripActive(false);
     setCurrentSpeed(0);
@@ -249,7 +275,19 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
               if (distToSchool < 0.1) {
                 await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
                   isActive: false,
-                  updatedAt: new Date().toISOString()
+                  updatedAt: new Date().toISOString(),
+                  terminationType: 'auto_arrival',
+                  terminationDistance: distToSchool.toFixed(3)
+                });
+                
+                // إرسال إشعار محلي للسائق
+                const Notifications = require("expo-notifications");
+                await Notifications.scheduleNotificationAsync({
+                  content: {
+                    title: "تم إنهاء الرحلة ✅",
+                    body: "تم إيقاف التتبع تلقائياً لوصولك لمحيط المدرسة بسلام.",
+                  },
+                  trigger: null,
                 });
               }
             }
