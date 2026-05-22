@@ -24,6 +24,7 @@ export default function ParentScreen() {
   const [studentInfo, setStudentInfo] = useState(null);
   const [driverInfo, setDriverInfo] = useState(null);
   const [staffInfo, setStaffInfo] = useState(null);
+  const [schoolLoc, setSchoolLoc] = useState(null);
 
   useEffect(() => {
     if (!schoolId || !user?.username) return;
@@ -36,6 +37,14 @@ export default function ParentScreen() {
         if (myStudentKey) setStudentInfo({ id: myStudentKey, ...data[myStudentKey] });
       }
       setLoading(false);
+    });
+
+    // جلب موقع المدرسة لعرضه على الخريطة
+    onValue(ref(db, `schools/${schoolId}`), (snap) => {
+      const data = snap.val();
+      if (data?.latitude && data?.longitude) {
+        setSchoolLoc({ latitude: data.latitude, longitude: data.longitude });
+      }
     });
 
     // 2. طلب صلاحيات الموقع
@@ -225,6 +234,7 @@ export default function ParentScreen() {
         showsUserLocation={true}
       >
         {myLocation && <Marker coordinate={myLocation} title="منزلي" pinColor="green" />}
+        {schoolLoc && <Marker coordinate={schoolLoc} title="المدرسة 🏫" pinColor="red" />}
         {animatedBusLocation && <Marker coordinate={animatedBusLocation} title="الباص 🚌" pinColor="blue" />}
       </MapView>
     </SafeAreaView>

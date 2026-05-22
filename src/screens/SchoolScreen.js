@@ -20,6 +20,7 @@ export default function SchoolScreen({ route, navigation }) {
   const [emergencies, setEmergencies] = useState([]);
   const [reports, setReports] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [schoolLocation, setSchoolLocation] = useState(null);
 
   // حقول الإدخال (ثابتة في أعلى الصفحة)
   const [formData, setFormData] = useState({});
@@ -48,6 +49,9 @@ export default function SchoolScreen({ route, navigation }) {
         setExpiryDate(data.endDate || '');
         const exp = new Date(data.endDate);
         setIsExpired(exp < new Date());
+        if (data.latitude && data.longitude) {
+          setSchoolLocation({ latitude: data.latitude, longitude: data.longitude });
+        }
       }
     });
 
@@ -152,6 +156,23 @@ export default function SchoolScreen({ route, navigation }) {
     </TouchableOpacity>
   );
 
+  const setLocationToCurrent = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('خطأ', 'يرجى السماح بالوصول للموقع');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({});
+      const newLoc = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      await update(ref(db, `schools/${schoolId}`), newLoc);
+      setSchoolLocation(newLoc);
+      Alert.alert('تم', 'تم تحديد موقع المدرسة الحالي بنجاح');
+    } catch (error) {
+      Alert.alert('خطأ', 'فشل في جلب الموقع الحالي');
+    }
+  };
+
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const matchSearch = s.name?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -195,7 +216,8 @@ export default function SchoolScreen({ route, navigation }) {
             { id: 'students', label: 'الطلاب' },
             { id: 'reports', label: 'التقارير' },
             { id: 'emergencies', label: 'الطوارئ' },
-            { id: 'managers', label: 'الإدارة' }
+            { id: 'managers', label: 'الإدارة' },
+            { id: 'settings', label: 'الإعدادات' }
           ].map(tab => (
             <TouchableOpacity key={tab.id} style={[styles.tabGridItem, activeTab === tab.id && styles.activeTabGrid]} onPress={() => { setActiveTab(tab.id); setFormData({}); setEditingId(null); }}>
               <Text style={[styles.tabGridText, activeTab === tab.id && styles.activeTabGridText]}>{tab.label}</Text>
@@ -251,6 +273,31 @@ export default function SchoolScreen({ route, navigation }) {
       )}
 
       <ScrollView style={styles.content} scrollEventThrottle={16} removeClippedSubviews={true}>
+        {/* إعدادات المدرسة */}
+        {activeTab === 'settings' && (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>إعدادات موقع المدرسة 📍</Text>
+            <Text style={styles.sectionDesc}>يستخدم هذا الموقع لإنهاء الرحلات تلقائياً وإبلاغ الأهالي بوصول الباص.</Text>
+            
+            <View style={styles.locationStatus}>
+              <Text style={styles.locationStatusText}>
+                الحالة: {schoolLocation ? '✅ تم تحديد الموقع' : '❌ لم يتم تحديد الموقع بعد'}
+              </Text>
+              {schoolLocation && (
+                <Text style={styles.locationCoords}>
+                  {schoolLocation.latitude.toFixed(5)}, {schoolLocation.longitude.toFixed(5)}
+                </Text>
+              )}
+            </View>
+
+            <TouchableOpacity style={styles.locationBtn} onPress={setLocationToCurrent}>
+              <Text style={styles.locationBtnText}>📍 أنا في المدرسة (تحديد موقعي الحالي)</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.noteText}>* سيتم استخدام هذا الموقع كنقطة النهاية الرسمية لجميع الرحلات.</Text>
+          </View>
+        )}
+
         {/* نموذج السائقين */}
         {activeTab === 'drivers' && showDriverForm && (
           <View style={styles.formCard}>
@@ -663,4 +710,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1F2937',
     fontWeight: '500',
-  }});
+  },
+  sectionDesc: { fontSize: 12, color: '#64748B', textAlign: 'right', marginBottom: 15 },
+  locationStatus: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 15 },
+  locationStatusText: { fontSize: 14, fontWeight: 'bold', textAlign: 'right', color: '#1E293B' },
+  locationCoords: { fontSize: 12, color: '#64748B', textAlign: 'right', marginTop: 5, fontFamily: 'monospace' },
+  locationBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
+  locationBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
+  noteText: { fontSize: 11, color: '#94A3B8', textAlign: 'right', fontStyle: 'italic' }
+});

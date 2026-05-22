@@ -23,6 +23,7 @@ export default function DriverScreen() {
   const [loading, setLoading] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [speedAlertSent, setSpeedAlertSent] = useState(false);
+  const [schoolLoc, setSchoolLoc] = useState(null);
   
   const stopTimers = useRef({}); // لتتبع وقت توقف الباص عند كل منزل
 
@@ -55,6 +56,14 @@ export default function DriverScreen() {
       const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
       setIsTripActive(hasStarted);
     })();
+
+    // جلب موقع المدرسة للإنهاء التلقائي
+    onValue(ref(db, `schools/${schoolId}`), (snap) => {
+      const data = snap.val();
+      if (data?.latitude && data?.longitude) {
+        setSchoolLoc({ latitude: data.latitude, longitude: data.longitude });
+      }
+    });
 
     return () => { unsubscribeStudents(); };
   }, [schoolId, user]);
@@ -218,7 +227,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
           }
 
           if (shouldUpdate) {
-            const { ref, update } = require("firebase/database");
+            const { ref, update, get } = require("firebase/database");
             const { db } = require("../firebaseConfig");
 
             await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
@@ -229,6 +238,22 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
               isActive: true
             });
             
+            // التحقق من الوصول للمدرسة لإنهاء الرحلة تلقائياً
+            const schoolSnap = await get(ref(db, `schools/${schoolId}`));
+            const sData = schoolSnap.val();
+            if (sData?.latitude && sData?.longitude) {
+              const { calculateDistance } = require("../utils/geo");
+              const distToSchool = calculateDistance(latitude, longitude, sData.latitude, sData.longitude);
+              
+              // إذا وصل الباص لمسافة أقل من 100 متر من المدرسة، يتم إنهاء الرحلة
+              if (distToSchool < 0.1) {
+                await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+                  isActive: false,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            }
+
             // حفظ الموقع الحالي كموقع أخير
             await AsyncStorage.setItem('last_known_location', JSON.stringify({ latitude, longitude }));
           }
