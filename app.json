@@ -1,29 +1,76 @@
 {
   "expo": {
     "name": "SchoolBusApp",
+<<<<<<< HEAD
     "slug": "SchoolBusApp",
+=======
+    "slug": "schoolbusapp",
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+<<<<<<< HEAD
     "newArchEnabled": true,
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+<<<<<<< HEAD
     "ios": {
       "supportsTablet": true
+=======
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.schoolbus.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
+        "NSLocationAlwaysUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
+        "NSLocationWhenInUseUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي"
+      }
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+<<<<<<< HEAD
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     }
+=======
+      "package": "com.schoolbus.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "NOTIFICATIONS"
+      ]
+    },
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#3B82F6"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
   }
 }
