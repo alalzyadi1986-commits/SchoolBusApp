@@ -72,8 +72,8 @@ export default function DriverScreen() {
 
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.High,
-      distanceInterval: 5,
-      timeInterval: 5000,
+      distanceInterval: 10, // زيادة المسافة لتقليل التحديثات غير الضرورية
+      timeInterval: 10000, // تحديث كل 10 ثوانٍ بدلاً من 5 لتوفير التكلفة والبطارية
       foregroundService: {
         notificationTitle: "تطبيق الباص يعمل",
         notificationBody: "يتم تتبع موقع الباص حالياً لإبلاغ الأهالي",
@@ -202,18 +202,36 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
           const { latitude, longitude, speed } = location.coords;
           const speedKmH = Math.max(0, Math.round((speed || 0) * 3.6));
 
-          // تحديث Firebase مباشرة من الخلفية
-          // ملاحظة: نحتاج لاستيراد db و ref هنا أيضاً إذا لم تكن متاحة في النطاق
-          const { ref, update } = require("firebase/database");
-          const { db } = require("../firebaseConfig");
+          // جلب آخر موقع مسجل لتجنب التحديث إذا لم يتحرك الباص فعلياً
+          const lastLocStr = await AsyncStorage.getItem('last_known_location');
+          let shouldUpdate = true;
+          
+          if (lastLocStr) {
+            const lastLoc = JSON.parse(lastLocStr);
+            const { calculateDistance } = require("../utils/geo");
+            const distanceMoved = calculateDistance(latitude, longitude, lastLoc.latitude, lastLoc.longitude);
+            
+            // إذا تحرك الباص أقل من 10 أمتار وكان واقفاً، لا نحدث Firebase لتوفير العمليات
+            if (distanceMoved < 0.01 && speedKmH < 2) {
+              shouldUpdate = false;
+            }
+          }
 
-          update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
-            latitude,
-            longitude,
-            speed: speedKmH,
-            updatedAt: new Date().toISOString(),
-            isActive: true
-          });
+          if (shouldUpdate) {
+            const { ref, update } = require("firebase/database");
+            const { db } = require("../firebaseConfig");
+
+            await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+              latitude,
+              longitude,
+              speed: speedKmH,
+              updatedAt: new Date().toISOString(),
+              isActive: true
+            });
+            
+            // حفظ الموقع الحالي كموقع أخير
+            await AsyncStorage.setItem('last_known_location', JSON.stringify({ latitude, longitude }));
+          }
         }
       } catch (err) {
         console.error("Error updating background location:", err);

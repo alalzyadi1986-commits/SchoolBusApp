@@ -15,7 +15,9 @@ export default function ParentScreen() {
   const { schoolId, user } = route.params || {};
 
   const [busLocation, setBusLocation] = useState(null);
+  const [animatedBusLocation, setAnimatedBusLocation] = useState(null);
   const [myLocation, setMyLocation] = useState(null);
+  const animationFrame = useRef(null);
   const [alertMinutes, setAlertMinutes] = useState(2);
   const [notified, setNotified] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,18 @@ export default function ParentScreen() {
     const unsubBus = onValue(ref(db, `schools/${schoolId}/bus/${studentInfo.driver_id}`), (snap) => {
       const busData = snap.val();
       if (busData && busData.isActive) {
-        setBusLocation({ latitude: busData.latitude, longitude: busData.longitude });
+        const newLoc = { latitude: busData.latitude, longitude: busData.longitude };
+        
+        // إذا كانت هذه أول مرة نستلم فيها الموقع، نضعه مباشرة
+        if (!busLocation) {
+          setBusLocation(newLoc);
+          setAnimatedBusLocation(newLoc);
+        } else {
+          // بدء عملية التحريك السلس من الموقع القديم إلى الجديد
+          animateBus(busLocation, newLoc);
+          setBusLocation(newLoc);
+        }
+
         if (myLocation) {
           const dist = calculateDistance(busData.latitude, busData.longitude, myLocation.latitude, myLocation.longitude);
           if (dist < alertMinutes * 0.5 && !notified && studentInfo.status !== 'absent_today') {
@@ -70,7 +83,10 @@ export default function ParentScreen() {
             setNotified(true);
           }
         }
-      } else { setBusLocation(null); }
+      } else { 
+        setBusLocation(null); 
+        setAnimatedBusLocation(null);
+      }
     });
 
     return () => { unsubDriver(); unsubStaff(); unsubBus(); };
@@ -120,6 +136,33 @@ export default function ParentScreen() {
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
+
+  // دالة لتحريك الباص بسلاسة خلال فترة التحديث (10 ثوانٍ)
+  const animateBus = (start, end) => {
+    let startTime = null;
+    const duration = 10000; // يجب أن تتوافق مع timeInterval في تطبيق السائق
+
+    const step = (timestamp) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      
+      const currentLat = start.latitude + (end.latitude - start.latitude) * progress;
+      const currentLon = start.longitude + (end.longitude - start.longitude) * progress;
+      
+      setAnimatedBusLocation({ latitude: currentLat, longitude: currentLon });
+
+      if (progress < 1) {
+        animationFrame.current = requestAnimationFrame(step);
+      }
+    };
+    
+    if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    animationFrame.current = requestAnimationFrame(step);
+  };
+
+  useEffect(() => {
+    return () => { if (animationFrame.current) cancelAnimationFrame(animationFrame.current); };
+  }, []);
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
@@ -182,7 +225,7 @@ export default function ParentScreen() {
         showsUserLocation={true}
       >
         {myLocation && <Marker coordinate={myLocation} title="منزلي" pinColor="green" />}
-        {busLocation && <Marker coordinate={busLocation} title="الباص 🚌" pinColor="blue" />}
+        {animatedBusLocation && <Marker coordinate={animatedBusLocation} title="الباص 🚌" pinColor="blue" />}
       </MapView>
     </SafeAreaView>
   );
