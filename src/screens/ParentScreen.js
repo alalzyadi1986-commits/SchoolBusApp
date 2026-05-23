@@ -1,4 +1,56 @@
 import React, { useState, useEffect } from 'react';
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import MapView, { Marker, Circle } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { ref, onValue } from "firebase/database";
+import { db } from '../firebaseConfig';
+
+export default function ParentScreen({ onBack, user, schoolId }) {
+  const [busLocation, setBusLocation] = useState(null);
+  const [myLocation, setMyLocation] = useState(null);
+  const [alertMinutes, setAlertMinutes] = useState(2);
+  const [notified, setNotified] = useState(false);
+
+  useEffect(() => {
+    // جلب موقع الأهل
+    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status !== 'granted') return;
+      Location.getCurrentPositionAsync({}).then(loc => {
+        setMyLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude
+        });
+      });
+    });
+
+    // جلب موقع باص المدرسة فقط باستخدام schoolId
+    const busRef = ref(db, `schools/${schoolId}/bus`);
+    return onValue(busRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setBusLocation({
+          latitude: data.latitude,
+          longitude: data.longitude
+        });
+
+        if (myLocation) {
+          const dist = calculateDistance(
+            data.latitude, data.longitude,
+            myLocation.latitude, myLocation.longitude
+          );
+          if (dist < alertMinutes * 0.5 && !notified) {
+            Alert.alert("تنبيه 🚌", `الباص يقترب! سيصل خلال ${alertMinutes} دقائق تقريباً`);
+            setNotified(true);
+          }
+        }
+      }
+    });
+  }, [schoolId, myLocation, alertMinutes, notified]);
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -15,13 +67,23 @@ export default function ParentScreen() {
   const { schoolId, user } = route.params || {};
 
   const [busLocation, setBusLocation] = useState(null);
+<<<<<<< HEAD
   const [myLocation, setMyLocation] = useState(null);
+=======
+  const [animatedBusLocation, setAnimatedBusLocation] = useState(null);
+  const [myLocation, setMyLocation] = useState(null);
+  const animationFrame = useRef(null);
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   const [alertMinutes, setAlertMinutes] = useState(2);
   const [notified, setNotified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [studentInfo, setStudentInfo] = useState(null);
   const [driverInfo, setDriverInfo] = useState(null);
   const [staffInfo, setStaffInfo] = useState(null);
+<<<<<<< HEAD
+=======
+  const [schoolLoc, setSchoolLoc] = useState(null);
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
 
   useEffect(() => {
     if (!schoolId || !user?.username) return;
@@ -36,6 +98,17 @@ export default function ParentScreen() {
       setLoading(false);
     });
 
+<<<<<<< HEAD
+=======
+    // جلب موقع المدرسة لعرضه على الخريطة
+    onValue(ref(db, `schools/${schoolId}`), (snap) => {
+      const data = snap.val();
+      if (data?.latitude && data?.longitude) {
+        setSchoolLoc({ latitude: data.latitude, longitude: data.longitude });
+      }
+    });
+
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     // 2. طلب صلاحيات الموقع
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -62,7 +135,22 @@ export default function ParentScreen() {
     const unsubBus = onValue(ref(db, `schools/${schoolId}/bus/${studentInfo.driver_id}`), (snap) => {
       const busData = snap.val();
       if (busData && busData.isActive) {
+<<<<<<< HEAD
         setBusLocation({ latitude: busData.latitude, longitude: busData.longitude });
+=======
+        const newLoc = { latitude: busData.latitude, longitude: busData.longitude };
+        
+        // إذا كانت هذه أول مرة نستلم فيها الموقع، نضعه مباشرة
+        if (!busLocation) {
+          setBusLocation(newLoc);
+          setAnimatedBusLocation(newLoc);
+        } else {
+          // بدء عملية التحريك السلس من الموقع القديم إلى الجديد
+          animateBus(busLocation, newLoc);
+          setBusLocation(newLoc);
+        }
+
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
         if (myLocation) {
           const dist = calculateDistance(busData.latitude, busData.longitude, myLocation.latitude, myLocation.longitude);
           if (dist < alertMinutes * 0.5 && !notified && studentInfo.status !== 'absent_today') {
@@ -70,7 +158,14 @@ export default function ParentScreen() {
             setNotified(true);
           }
         }
+<<<<<<< HEAD
       } else { setBusLocation(null); }
+=======
+      } else { 
+        setBusLocation(null); 
+        setAnimatedBusLocation(null);
+      }
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     });
 
     return () => { unsubDriver(); unsubStaff(); unsubBus(); };
@@ -112,15 +207,87 @@ export default function ParentScreen() {
     if (phone) Linking.openURL(`tel:${phone}`);
     else Alert.alert('خطأ', 'رقم الهاتف غير متوفر');
   };
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
 
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  }
+
+  const region = myLocation ? {
+    ...myLocation,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05
+  } : {
+    latitude: 31.9454,
+    longitude: 35.9284,
+    latitudeDelta: 0.1,
+    longitudeDelta: 0.1
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>تتبع الباص 🚌</Text>
+
+      <View style={styles.settings}>
+        <Text style={styles.settingsLabel}>نبهني قبل وصول الباص بـ:</Text>
+        <View style={{ flexDirection: 'row' }}>
+          {[1, 2, 5].map(m => (
+            <TouchableOpacity
+              key={m}
+              onPress={() => { setAlertMinutes(m); setNotified(false); }}
+              style={[styles.minBtn, alertMinutes === m && styles.minBtnOn]}
+            >
+              <Text style={[styles.minText, alertMinutes === m && styles.minTextOn]}>
+                {m} د
+              </Text>
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
+<<<<<<< HEAD
+=======
+  // دالة لتحريك الباص بسلاسة خلال فترة التحديث (10 ثوانٍ)
+  const animateBus = (start, end) => {
+    let startTime = null;
+    const duration = 10000; // يجب أن تتوافق مع timeInterval في تطبيق السائق
+
+    const step = (timestamp) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      
+      const currentLat = start.latitude + (end.latitude - start.latitude) * progress;
+      const currentLon = start.longitude + (end.longitude - start.longitude) * progress;
+      
+      setAnimatedBusLocation({ latitude: currentLat, longitude: currentLon });
+
+      if (progress < 1) {
+        animationFrame.current = requestAnimationFrame(step);
+      }
+    };
+    
+    if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    animationFrame.current = requestAnimationFrame(step);
+  };
+
+  useEffect(() => {
+    return () => { if (animationFrame.current) cancelAnimationFrame(animationFrame.current); };
+  }, []);
+
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
@@ -171,24 +338,84 @@ export default function ParentScreen() {
           {[1, 2, 5, 10].map(m => (
             <TouchableOpacity key={m} style={[styles.optBtn, alertMinutes === m && styles.optBtnActive]} onPress={() => { setAlertMinutes(m); setNotified(false); }}>
               <Text style={[styles.optText, alertMinutes === m && styles.optTextActive]}>{m} د</Text>
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+      <MapView style={styles.map} region={region}>
+        {myLocation && (
+          <Marker coordinate={myLocation} title="منزلي" pinColor="green" />
+        )}
+        {busLocation && (
+          <Marker coordinate={busLocation} title="الباص 🚌" pinColor="blue" />
+        )}
+        {myLocation && (
+          <Circle
+            center={myLocation}
+            radius={alertMinutes * 500}
+            fillColor="rgba(230, 126, 34, 0.2)"
+            strokeColor="#e67e22"
+          />
+        )}
+      </MapView>
+
+      {!busLocation && (
+        <Text style={styles.nobus}>⏳ في انتظار بث السائق للموقع...</Text>
+      )}
+
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Text style={styles.btnText}>خروج 🚪</Text>
+      </TouchableOpacity>
+    </View>
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
       <MapView
         style={styles.map}
         initialRegion={{ latitude: myLocation?.latitude || 31.9454, longitude: myLocation?.longitude || 35.9284, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
         showsUserLocation={true}
       >
         {myLocation && <Marker coordinate={myLocation} title="منزلي" pinColor="green" />}
+<<<<<<< HEAD
         {busLocation && <Marker coordinate={busLocation} title="الباص 🚌" pinColor="blue" />}
       </MapView>
     </SafeAreaView>
+=======
+        {schoolLoc && <Marker coordinate={schoolLoc} title="المدرسة 🏫" pinColor="red" />}
+        {animatedBusLocation && <Marker coordinate={animatedBusLocation} title="الباص 🚌" pinColor="blue" />}
+      </MapView>
+    </SafeAreaView>
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   );
 }
 
 const styles = StyleSheet.create({
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  container: { flex: 1, padding: 20, paddingTop: 50, alignItems: 'center' },
+  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#2c3e50' },
+  settings: { width: '100%', padding: 12, backgroundColor: '#fff', borderRadius: 10, marginBottom: 10, elevation: 2 },
+  settingsLabel: { fontSize: 14, color: '#7f8c8d', textAlign: 'right', marginBottom: 8 },
+  minBtn: { padding: 8, borderWidth: 1, borderColor: '#e67e22', borderRadius: 5, marginLeft: 8 },
+  minBtnOn: { backgroundColor: '#e67e22' },
+  minText: { color: '#e67e22', fontWeight: 'bold' },
+  minTextOn: { color: '#fff' },
+  map: { width: Dimensions.get('window').width - 40, height: '55%', borderRadius: 20 },
+  nobus: { fontSize: 13, color: '#e74c3c', marginTop: 8 },
+  backBtn: { backgroundColor: '#95a5a6', padding: 15, borderRadius: 10, width: '100%', alignItems: 'center', marginTop: 15 },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+});
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
@@ -216,3 +443,7 @@ const styles = StyleSheet.create({
   optTextActive: { color: '#FFF' },
   map: { flex: 1 }
 });
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c

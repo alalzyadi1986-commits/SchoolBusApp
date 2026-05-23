@@ -1,3 +1,93 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { ref, set, onValue } from "firebase/database";
+import { db } from '../firebaseConfig';
+
+export default function DriverScreen({ onBack, user, schoolId }) {
+  const [currentLoc, setCurrentLoc] = useState({
+    latitude: 31.9454,
+    longitude: 35.9284
+  });
+  const [students, setStudents] = useState([]);
+
+  useEffect(() => {
+    // جلب طلاب المدرسة فقط باستخدام schoolId
+    const studentsRef = ref(db, `schools/${schoolId}/students`);
+    onValue(studentsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        setStudents(list);
+      } else { setStudents([]); }
+    });
+
+    // بث موقع السائق لمدرسته فقط
+    let sub;
+    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status !== 'granted') return;
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 5 },
+        (loc) => {
+          setCurrentLoc(loc.coords);
+          // حفظ موقع الباص تحت مدرسته فقط
+          set(ref(db, `schools/${schoolId}/bus`), {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      ).then(s => sub = s);
+    });
+
+    return () => sub && sub.remove();
+  }, [schoolId]);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>لوحة السائق 🚌</Text>
+      <Text style={styles.subTitle}>جاري بث موقعك لأهل الطلاب...</Text>
+
+      <MapView
+        style={styles.map}
+        initialRegion={{
+          ...currentLoc,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05
+        }}
+        showsUserLocation={true}
+      >
+        {students.map(s => (
+          <Marker
+            key={s.id}
+            coordinate={{ latitude: s.latitude, longitude: s.longitude }}
+            title={s.name}
+            pinColor="orange"
+          />
+        ))}
+      </MapView>
+
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Text style={styles.btnText}>إنهاء الرحلة 🔴</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20, paddingTop: 50, alignItems: 'center' },
+  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 5, color: '#2c3e50' },
+  subTitle: { fontSize: 13, color: '#27ae60', marginBottom: 10 },
+  map: { width: Dimensions.get('window').width - 40, height: '70%', borderRadius: 20 },
+  backBtn: { backgroundColor: '#e74c3c', padding: 15, borderRadius: 10, width: '100%', alignItems: 'center', marginTop: 20 },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+});
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, Alert, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
@@ -23,6 +113,10 @@ export default function DriverScreen() {
   const [loading, setLoading] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [speedAlertSent, setSpeedAlertSent] = useState(false);
+<<<<<<< HEAD
+=======
+  const [schoolLoc, setSchoolLoc] = useState(null);
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   
   const stopTimers = useRef({}); // لتتبع وقت توقف الباص عند كل منزل
 
@@ -56,6 +150,17 @@ export default function DriverScreen() {
       setIsTripActive(hasStarted);
     })();
 
+<<<<<<< HEAD
+=======
+    // جلب موقع المدرسة للإنهاء التلقائي
+    onValue(ref(db, `schools/${schoolId}`), (snap) => {
+      const data = snap.val();
+      if (data?.latitude && data?.longitude) {
+        setSchoolLoc({ latitude: data.latitude, longitude: data.longitude });
+      }
+    });
+
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     return () => { unsubscribeStudents(); };
   }, [schoolId, user]);
 
@@ -72,8 +177,13 @@ export default function DriverScreen() {
 
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.High,
+<<<<<<< HEAD
       distanceInterval: 5,
       timeInterval: 5000,
+=======
+      distanceInterval: 10, // زيادة المسافة لتقليل التحديثات غير الضرورية
+      timeInterval: 10000, // تحديث كل 10 ثوانٍ بدلاً من 5 لتوفير التكلفة والبطارية
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
       foregroundService: {
         notificationTitle: "تطبيق الباص يعمل",
         notificationBody: "يتم تتبع موقع الباص حالياً لإبلاغ الأهالي",
@@ -92,10 +202,43 @@ export default function DriverScreen() {
     }
     
     if (schoolId && user?.username) { 
+<<<<<<< HEAD
       update(ref(db, `schools/${schoolId}/bus/${user.username}`), { 
         isActive: false, 
         updatedAt: new Date().toISOString() 
       }); 
+=======
+      // جلب الموقع الحالي عند الإغلاق اليدوي للتوثيق
+      let closeLocation = "Unknown";
+      let distToSchool = "N/A";
+      try {
+        const loc = await Location.getCurrentPositionAsync({});
+        closeLocation = `${loc.coords.latitude},${loc.coords.longitude}`;
+        if (schoolLoc) {
+          const { calculateDistance } = require("../utils/geo");
+          distToSchool = calculateDistance(loc.coords.latitude, loc.coords.longitude, schoolLoc.latitude, schoolLoc.longitude).toFixed(2);
+        }
+      } catch (e) {}
+
+      await update(ref(db, `schools/${schoolId}/bus/${user.username}`), { 
+        isActive: false, 
+        updatedAt: new Date().toISOString(),
+        terminationType: 'manual',
+        terminationDistance: distToSchool,
+        terminationCoords: closeLocation
+      });
+
+      // إضافة سجل للتقرير لكشف التلاعب
+      if (distToSchool !== "N/A" && parseFloat(distToSchool) > 0.2) {
+        const reportRef = push(ref(db, `schools/${schoolId}/reports`));
+        await set(reportRef, {
+          type: 'termination_alert',
+          driverId: user.username,
+          message: `تنبيه: السائق ${user.name} أنهى الرحلة يدوياً وهو على بعد ${distToSchool} كم من المدرسة.`,
+          timestamp: new Date().toISOString()
+        });
+      }
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     }
     setIsTripActive(false);
     setCurrentSpeed(0);
@@ -202,6 +345,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
           const { latitude, longitude, speed } = location.coords;
           const speedKmH = Math.max(0, Math.round((speed || 0) * 3.6));
 
+<<<<<<< HEAD
           // تحديث Firebase مباشرة من الخلفية
           // ملاحظة: نحتاج لاستيراد db و ref هنا أيضاً إذا لم تكن متاحة في النطاق
           const { ref, update } = require("firebase/database");
@@ -214,6 +358,66 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
             updatedAt: new Date().toISOString(),
             isActive: true
           });
+=======
+          // جلب آخر موقع مسجل لتجنب التحديث إذا لم يتحرك الباص فعلياً
+          const lastLocStr = await AsyncStorage.getItem('last_known_location');
+          let shouldUpdate = true;
+          
+          if (lastLocStr) {
+            const lastLoc = JSON.parse(lastLocStr);
+            const { calculateDistance } = require("../utils/geo");
+            const distanceMoved = calculateDistance(latitude, longitude, lastLoc.latitude, lastLoc.longitude);
+            
+            // إذا تحرك الباص أقل من 10 أمتار وكان واقفاً، لا نحدث Firebase لتوفير العمليات
+            if (distanceMoved < 0.01 && speedKmH < 2) {
+              shouldUpdate = false;
+            }
+          }
+
+          if (shouldUpdate) {
+            const { ref, update, get } = require("firebase/database");
+            const { db } = require("../firebaseConfig");
+
+            await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+              latitude,
+              longitude,
+              speed: speedKmH,
+              updatedAt: new Date().toISOString(),
+              isActive: true
+            });
+            
+            // التحقق من الوصول للمدرسة لإنهاء الرحلة تلقائياً
+            const schoolSnap = await get(ref(db, `schools/${schoolId}`));
+            const sData = schoolSnap.val();
+            if (sData?.latitude && sData?.longitude) {
+              const { calculateDistance } = require("../utils/geo");
+              const distToSchool = calculateDistance(latitude, longitude, sData.latitude, sData.longitude);
+              
+              // إذا وصل الباص لمسافة أقل من 100 متر من المدرسة، يتم إنهاء الرحلة
+              if (distToSchool < 0.1) {
+                await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
+                  isActive: false,
+                  updatedAt: new Date().toISOString(),
+                  terminationType: 'auto_arrival',
+                  terminationDistance: distToSchool.toFixed(3)
+                });
+                
+                // إرسال إشعار محلي للسائق
+                const Notifications = require("expo-notifications");
+                await Notifications.scheduleNotificationAsync({
+                  content: {
+                    title: "تم إنهاء الرحلة ✅",
+                    body: "تم إيقاف التتبع تلقائياً لوصولك لمحيط المدرسة بسلام.",
+                  },
+                  trigger: null,
+                });
+              }
+            }
+
+            // حفظ الموقع الحالي كموقع أخير
+            await AsyncStorage.setItem('last_known_location', JSON.stringify({ latitude, longitude }));
+          }
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
         }
       } catch (err) {
         console.error("Error updating background location:", err);
@@ -255,3 +459,7 @@ const styles = StyleSheet.create({
   callBtn: { backgroundColor: '#3B82F6', padding: 6, borderRadius: 6 },
   callBtnText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' }
 });
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c

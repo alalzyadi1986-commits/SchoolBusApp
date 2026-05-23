@@ -1,16 +1,38 @@
 {
   "expo": {
     "name": "SchoolBusApp",
+<<<<<<< HEAD
     "slug": "schoolbusapp",
+=======
+<<<<<<< HEAD
+    "slug": "SchoolBusApp",
+=======
+    "slug": "schoolbusapp",
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    "newArchEnabled": true,
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    "ios": {
+      "supportsTablet": true
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -26,12 +48,26 @@
         "NSLocationAlwaysUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
         "NSLocationWhenInUseUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي"
       }
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
       "package": "com.schoolbus.app",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -51,5 +87,9 @@
     "plugins": [
       "@react-native-community/datetimepicker"
     ]
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   }
 }

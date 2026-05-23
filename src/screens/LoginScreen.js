@@ -9,6 +9,27 @@ import {
   Alert, 
   KeyboardAvoidingView, 
   Platform, 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  ScrollView 
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ref, onValue } from 'firebase/database';
+import { db } from '../firebaseConfig'; 
+
+export default function LoginScreen() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false); 
+  const [isPasswordSecure, setIsPasswordSecure] = useState(false); // false تعني كلمة السر ظاهرة افتراضياً
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
+
+  // جلب البيانات المحفوظة عند فتح الشاشة
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   ScrollView,
   Dimensions,
   StatusBar
@@ -32,6 +53,10 @@ export default function LoginScreen() {
   const [lang, setLang] = useState('ar');
   const t = translations[lang];
 
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   useEffect(() => {
     loadSavedCredentials();
   }, []);
@@ -39,10 +64,25 @@ export default function LoginScreen() {
   const loadSavedCredentials = async () => {
     try {
       const savedUser = await AsyncStorage.getItem('remembered_username');
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+      const savedPass = await AsyncStorage.getItem('remembered_password');
+      const isRemembered = await AsyncStorage.getItem('remember_me_status');
+
+      if (isRemembered === 'true' && savedUser && savedPass) {
+        setUsername(savedUser);
+        setPassword(savedPass);
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
       const isRemembered = await AsyncStorage.getItem('remember_me_status');
 
       if (isRemembered === 'true' && savedUser) {
         setUsername(savedUser);
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
         setRememberMe(true);
       }
     } catch (error) {
@@ -50,6 +90,27 @@ export default function LoginScreen() {
     }
   };
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  // دالة التوجيه الصحيحة والمطابقة لملف App.js بنسبة 100%
+  const navigateToDashboard = (userRole) => {
+    if (userRole === 'super_admin' || userRole === 'superadmin') {
+      navigation.replace('SuperAdminScreen');
+    } else if (userRole === 'school') {
+      navigation.replace('SchoolScreen');
+    } else if (userRole === 'driver') {
+      navigation.replace('DriverScreen');
+    } else if (userRole === 'attendant' || userRole === 'staff') {
+      navigation.replace('StaffScreen');
+    } else {
+      navigation.replace('ParentScreen');
+    }
+  };
+
+  // دالة الفحص والتحقق من الحسابات والـ Firebase
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   const isSubscriptionActive = (endDate) => {
     if (!endDate) return false;
     const today = new Date();
@@ -92,6 +153,10 @@ export default function LoginScreen() {
     return Math.abs(hash).toString(36);
   };
 
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   const handleLogin = async () => {
     const enteredUser = username ? username.trim() : "";
     const enteredPass = password ? password.trim() : "";
@@ -102,15 +167,163 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+<<<<<<< HEAD
     try {
       if (rememberMe) {
         await AsyncStorage.setItem('remembered_username', enteredUser);
+=======
+<<<<<<< HEAD
+
+    try {
+      if (rememberMe) {
+        await AsyncStorage.setItem('remembered_username', enteredUser);
+        await AsyncStorage.setItem('remembered_password', enteredPass);
+=======
+    try {
+      if (rememberMe) {
+        await AsyncStorage.setItem('remembered_username', enteredUser);
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
         await AsyncStorage.setItem('remember_me_status', 'true');
       } else {
         await AsyncStorage.removeItem('remembered_username');
         await AsyncStorage.removeItem('remembered_password');
         await AsyncStorage.setItem('remember_me_status', 'false');
       }
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    } catch (e) {
+      console.log("Error saving remember me status", e);
+    }
+
+    // التحقق من حساب المدير العام الثابت (Super Admin)
+    if ((enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && enteredPass === 'admin123') {
+      const sessionData = { username: 'alalzyadi1986@gmail.com', role: 'superadmin' };
+      await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
+      setLoading(false);
+      navigateToDashboard('superadmin');
+      return;
+    }
+
+    // البحث في الحسابات الفرعية الأخرى داخل الفايربيس
+    const pathsToCheck = [
+      { path: 'schools', role: 'school' },
+      { path: 'drivers', role: 'driver' },
+      { path: 'attendants', role: 'staff' },
+      { path: 'parents', role: 'parent' }
+    ];
+
+    let checkCount = 0;
+    let foundUser = null;
+
+    pathsToCheck.forEach((item) => {
+      const branchRef = ref(db, item.path);
+      onValue(branchRef, async (snapshot) => {
+        checkCount++;
+        const data = snapshot.val();
+
+        if (data && !foundUser) {
+          Object.keys(data).forEach((key) => {
+            const userObj = data[key];
+            const dbUser = userObj && userObj.username ? userObj.username.toString().trim() : null;
+            const dbPass = userObj && userObj.password ? userObj.password.toString().trim() : null;
+
+            if (dbUser === enteredUser && dbPass === enteredPass) {
+              foundUser = { ...userObj, id: key, role: item.role };
+            }
+          });
+        }
+
+        if (checkCount === pathsToCheck.length) {
+          setLoading(false);
+          if (foundUser) {
+            await AsyncStorage.setItem('user_session', JSON.stringify(foundUser));
+            navigateToDashboard(foundUser.role);
+          } else {
+            Alert.alert('خطأ في الدخول', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
+          }
+        }
+      }, { onlyOnce: true });
+    });
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === "ios" ? "padding" : "none"} 
+      style={styles.container}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false} showsVerticalScrollIndicator={false}>
+        <View style={styles.headerArea}>
+          <Text style={styles.logoText}>🚌</Text>
+          <Text style={styles.title}>تطبيق باصات المدارس</Text>
+          <Text style={styles.subtitle}>مرحباً بك، الرجاء تسجيل الدخول للمتابعة</Text>
+        </View>
+
+        <View style={styles.formCard}>
+          {/* حقل اسم المستخدم أو الجيميل */}
+          <Text style={styles.label}>اسم المستخدم أو البريد الإلكتروني</Text>
+          <TextInput 
+            style={styles.input}
+            placeholder="أدخل اسم المستخدم أو الجيميل"
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          {/* حقل كلمة المرور مع زر الإظهار والإخفاء */}
+          <Text style={styles.label}>كلمة المرور</Text>
+          <View style={styles.passwordInputContainer}>
+            <TouchableOpacity 
+              style={styles.visibilityButton} 
+              onPress={() => setIsPasswordSecure(!isPasswordSecure)}
+            >
+              <Text style={styles.visibilityButtonText}>
+                {isPasswordSecure ? "إظهار 👁️" : "إخفاء 🙈"}
+              </Text>
+            </TouchableOpacity>
+            <TextInput 
+              style={styles.passwordField}
+              placeholder="أدخل كلمة المرور"
+              secureTextEntry={isPasswordSecure}
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+            />
+          </View>
+
+          {/* تذكر كلمة السر */}
+          <TouchableOpacity 
+            style={styles.checkboxContainer} 
+            onPress={() => setRememberMe(!rememberMe)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.checkboxLabel}>تذكر كلمة السر</Text>
+            <View style={[styles.customCheckbox, rememberMe && styles.customCheckboxChecked]}>
+              {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+          </TouchableOpacity>
+
+          {/* زر تسجيل الدخول */}
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>تسجيل الدخول</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* معلومات الهاتف والإيميل الثابتة */}
+          <View style={styles.contactInfoArea}>
+            <Text style={styles.contactText}>هاتف: 999999999</Text>
+            <Text style={styles.contactText}>إيميل: 99999999</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
 
       // 1. التحقق من Super Admin
       const adminRef = ref(db, 'admin_settings/super_admin');
@@ -324,10 +537,75 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   );
 }
 
 const styles = StyleSheet.create({
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F7FB',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  headerArea: {
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+  logoText: {
+    fontSize: 55,
+    marginBottom: 5,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  formCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 6,
+    marginTop: 10,
+    textAlign: 'right',
+  },
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    textAlign: 'right',
+    color: '#0F172A',
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   mainContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -435,20 +713,67 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'right',
     color: '#1E293B',
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   },
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingLeft: 10,
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     backgroundColor: '#F1F5F9',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   },
   passwordField: {
     flex: 1,
     padding: 12,
     fontSize: 15,
     textAlign: 'right',
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    color: '#0F172A',
+  },
+  visibilityButton: {
+    padding: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  visibilityButtonText: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  checkboxLabel: {
+    fontSize: 13,
+    color: '#475569',
+    marginRight: 8,
+    fontWeight: '500',
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     color: '#1E293B',
   },
   visibilityButton: {
@@ -471,15 +796,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginRight: 8,
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   },
   customCheckbox: {
     width: 18,
     height: 18,
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     borderWidth: 2,
     borderColor: '#CBD5E1',
     borderRadius: 5,
     justifyContent: 'center',
     alignItems: 'center',
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   },
   customCheckboxChecked: {
     backgroundColor: '#3B82F6',
@@ -491,6 +835,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   loginButton: {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 15,
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     backgroundColor: '#3B82F6',
     borderRadius: 10,
     padding: 14,
@@ -504,10 +858,33 @@ const styles = StyleSheet.create({
   loginButtonDisabled: {
     backgroundColor: '#94A3B8',
     shadowOpacity: 0,
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   },
   loginButtonText: {
     color: '#FFF',
     fontSize: 16,
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+    fontWeight: 'bold',
+  },
+  contactInfoArea: {
+    marginTop: 20,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  contactText: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 4,
+    fontWeight: '500',
+=======
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
     fontWeight: '700',
   },
   footer: {
@@ -530,5 +907,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#475569',
     fontWeight: '600',
+<<<<<<< HEAD
+=======
+>>>>>>> 26cefefa39de4b8031862128921805f50f269406
+>>>>>>> e88856a2ede78e87d601600f19ba6c765b7d517c
   },
 });
