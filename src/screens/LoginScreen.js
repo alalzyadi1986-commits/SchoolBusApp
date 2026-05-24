@@ -48,9 +48,7 @@ export default function LoginScreen() {
 
   const isSubscriptionActive = (endDate) => {
     if (!endDate) return false;
-    const today = new Date();
-    const expiry = new Date(endDate);
-    return expiry > today;
+    return new Date(endDate) > new Date();
   };
 
   const navigateToDashboard = (userRole, userData, schoolId) => {
@@ -62,7 +60,7 @@ export default function LoginScreen() {
       }
     });
 
-    if (userRole === 'super_admin' || userRole === 'superadmin') {
+    if (userRole === 'superadmin') {
       navigation.replace('SuperAdminScreen', params);
     } else if (userRole === 'school') {
       navigation.replace('SchoolScreen', params);
@@ -106,11 +104,11 @@ export default function LoginScreen() {
       }
 
       // 1. التحقق من Super Admin
-      const adminRef = ref(db, 'admin_settings/super_admin');
-      const adminSnapshot = await get(adminRef);
+      const adminSnapshot = await get(ref(db, 'admin_settings/super_admin'));
       const adminData = adminSnapshot.val();
       const correctAdminPass = adminData ? adminData.password : 'admin123';
       const hashedEnteredPass = hashPassword(enteredPass);
+
       const isAdminAuthenticated =
         (enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') &&
         (enteredPass === correctAdminPass || hashedEnteredPass === correctAdminPass || enteredPass === 'admin123');
@@ -123,93 +121,59 @@ export default function LoginScreen() {
         return;
       }
 
-      // 2. البحث في userIndex أولاً لمعرفة schoolId الخاص بالمستخدم
-      // هذا يمنع جلب بيانات جميع المدارس دفعة واحدة
-      const userIndexRef = ref(db, `userIndex/${enteredUser}`);
-      const userIndexSnapshot = await get(userIndexRef);
+      // 2. البحث في userIndex لمعرفة schoolId ودور المستخدم
+      const userIndexSnapshot = await get(ref(db, `userIndex/${enteredUser}`));
       const userIndex = userIndexSnapshot.val();
 
-      if (userIndex && userIndex.schoolId) {
-        const { schoolId, role } = userIndex;
-
-        // التحقق من صلاحية اشتراك المدرسة
-        const schoolSnapshot = await get(ref(db, `schools/${schoolId}`));
-        const schoolData = schoolSnapshot.val();
-
-        if (!schoolData || !isSubscriptionActive(schoolData.endDate)) {
-          Alert.alert('خطأ', 'اشتراك المدرسة غير نشط أو غير موجود.');
-          setLoading(false);
-          return;
-        }
-
-        // جلب بيانات المستخدم من مدرسته فقط
-        const rolePath = role === 'school' ? null : `schools/${schoolId}/${role}s/${enteredUser}`;
-
-        let userData = null;
-
-        if (role === 'school') {
-          // مدير المدرسة - بياناته في users
-          const userRef = ref(db, `users/${enteredUser.replace('.', ',')}`);
-          const userSnap = await get(userRef);
-          userData = userSnap.val();
-        } else {
-          // سائق أو موظف أو ولي أمر
-          const userRef = ref(db, rolePath);
-          const userSnap = await get(userRef);
-          userData = userSnap.val();
-        }
-
-        if (!userData || userData.password !== enteredPass) {
-          Alert.alert('خطأ', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
-          setLoading(false);
-          return;
-        }
-
-        const sessionData = {
-          ...userData,
-          username: enteredUser,
-          role,
-          schoolId,
-          schoolName: schoolData.name,
-        };
-        await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
+      if (!userIndex || !userIndex.schoolId) {
+        Alert.alert('خطأ', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
         setLoading(false);
-        navigateToDashboard(role, sessionData, schoolId);
         return;
       }
 
-      // 3. إذا لم يوجد في userIndex، نبحث في users (للتوافق مع البيانات القديمة)
-      const usersRef = ref(db, 'users');
-      const usersSnapshot = await get(usersRef);
-      const allUsers = usersSnapshot.val();
+      const { schoolId, role } = userIndex;
 
-      if (allUsers) {
-        for (const userId in allUsers) {
-          const userData = allUsers[userId];
-          if (
-            (userData.username === enteredUser || userData.email === enteredUser) &&
-            userData.password === enteredPass
-          ) {
-            const schoolSnapshot = await get(ref(db, `schools/${userData.schoolId}`));
-            const schoolData = schoolSnapshot.val();
+      // 3. التحقق من صلاحية اشتراك المدرسة
+      const schoolSnapshot = await get(ref(db, `schools/${schoolId}`));
+      const schoolData = schoolSnapshot.val();
 
-            if (!schoolData || !isSubscriptionActive(schoolData.endDate)) {
-              Alert.alert('خطأ', 'اشتراك المدرسة غير نشط أو غير موجود.');
-              setLoading(false);
-              return;
-            }
-
-            const sessionData = { ...userData, id: userId, schoolName: schoolData.name };
-            await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
-            setLoading(false);
-            navigateToDashboard(userData.role, sessionData, userData.schoolId);
-            return;
-          }
-        }
+      if (!schoolData || !isSubscriptionActive(schoolData.endDate)) {
+        Alert.alert('خطأ', 'اشتراك المدرسة غير نشط أو غير موجود.');
+        setLoading(false);
+        return;
       }
 
-      Alert.alert('خطأ', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
+      // 4. جلب بيانات المستخدم من مدرسته فقط
+      let userData = null;
+
+      if (role === 'school') {
+        const userKey = enteredUser.replace(/\./g, ',');
+        const userSnap = await get(ref(db, `users/${userKey}`));
+        userData = userSnap.val();
+      } else {
+        const rolePath = `schools/${schoolId}/${role}s/${enteredUser}`;
+        const userSnap = await get(ref(db, rolePath));
+        userData = userSnap.val();
+      }
+
+      if (!userData || userData.password !== enteredPass) {
+        Alert.alert('خطأ', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
+        setLoading(false);
+        return;
+      }
+
+      // 5. حفظ الجلسة والدخول
+      const sessionData = {
+        ...userData,
+        username: enteredUser,
+        role,
+        schoolId,
+        schoolName: schoolData.name,
+      };
+      await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
       setLoading(false);
+      navigateToDashboard(role, sessionData, schoolId);
+
     } catch (error) {
       console.error('Login error:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
