@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TextInput, 
-  TouchableOpacity, 
-  Alert, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  Alert,
   ActivityIndicator,
-  Platform,
+  ScrollView,
   StatusBar,
   Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../firebaseConfig';
-import { ref, set, push, onValue, remove, update } from 'firebase/database';
+import { ref, set, push, onValue, remove, update, get } from 'firebase/database';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SuperAdminScreen({ navigation }) {
   const [schools, setSchools] = useState([]);
@@ -26,24 +27,17 @@ export default function SuperAdminScreen({ navigation }) {
   const [endDate, setEndDate] = useState(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-  
   const [loading, setLoading] = useState(false);
   const [editingSchoolId, setEditingSchoolId] = useState(null);
-
-  // حالات لتغيير كلمة سر المدير العام
   const [showPassModal, setShowPassModal] = useState(false);
   const [newAdminPass, setNewAdminPass] = useState('');
 
-  // جلب المدارس من قاعدة البيانات
   useEffect(() => {
     const schoolsRef = ref(db, 'schools');
     const unsubscribe = onValue(schoolsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const list = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
+        const list = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
         setSchools(list);
       } else {
         setSchools([]);
@@ -52,52 +46,26 @@ export default function SuperAdminScreen({ navigation }) {
     return () => unsubscribe();
   }, []);
 
-  const onStartDateChange = (event, selectedDate) => {
-    setShowStartPicker(false);
-    if (selectedDate) setStartDate(selectedDate);
-  };
-
-  const onEndDateChange = (event, selectedDate) => {
-    setShowEndPicker(false);
-    if (selectedDate) setEndDate(selectedDate);
-  };
-
   const formatDate = (date) => {
     if (!date) return '';
     const d = new Date(date);
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
   };
 
-  // دالة تشفير كلمة المرور بسيطة وآمنة
-  const hashPassword = (password) => {
-    let hash = 0;
-    if (password.length === 0) return hash.toString();
-    for (let i = 0; i < password.length; i++) {
-      const char = password.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  };
-
   const checkSubscriptionStatus = (end) => {
     if (!end) return { text: 'غير محدد', color: '#94A3B8' };
     const today = new Date();
     const expiry = new Date(end);
-    if (expiry > today) {
-      return { text: 'نشط', color: '#10B981' };
-    } else {
-      return { text: 'منتهي', color: '#EF4444' };
-    }
+    return expiry > today
+      ? { text: 'نشط ✅', color: '#10B981' }
+      : { text: 'منتهي ❌', color: '#EF4444' };
   };
 
-  // إضافة أو تعديل مدرسة
   const handleSaveSchool = async () => {
     if (!schoolName || !adminEmail || !adminPassword) {
       Alert.alert('خطأ', 'يرجى تعبئة جميع الحقول');
       return;
     }
-
     setLoading(true);
     try {
       const schoolData = {
@@ -110,13 +78,53 @@ export default function SuperAdminScreen({ navigation }) {
       };
 
       if (editingSchoolId) {
-        const schoolRef = ref(db, `schools/${editingSchoolId}`);
-        await update(schoolRef, schoolData);
+        // تحديث مدرسة موجودة
+        await update(ref(db, `schools/${editingSchoolId}`), schoolData);
+
+        // تحديث في users
+        const userKey = adminEmail.replace(/\./g, ',');
+        await update(ref(db, `users/${userKey}`), {
+          ...schoolData,
+          schoolId: editingSchoolId,
+          username: adminEmail,
+        });
+
+        // تحديث userIndex
+        await update(ref(db, `userIndex/${adminEmail}`), {
+          schoolId: editingSchoolId,
+          role: 'school',
+        });
+
         Alert.alert('نجاح', 'تم تحديث بيانات المدرسة بنجاح');
         setEditingSchoolId(null);
       } else {
+        // إضافة مدرسة جديدة
         const newSchoolRef = push(ref(db, 'schools'));
+        const newSchoolId = newSchoolRef.key;
+
+        // حفظ بيانات المدرسة
         await set(newSchoolRef, schoolData);
+
+        // تهيئة الفروع الفرعية
+        const branches = ['drivers', 'students', 'parents', 'staff', 'buses', 'managers', 'emergencies', 'reports'];
+        for (const branch of branches) {
+          await set(ref(db, `schools/${newSchoolId}/${branch}`), {});
+        }
+
+        // إضافة مدير المدرسة في users
+        const userKey = adminEmail.replace(/\./g, ',');
+        await set(ref(db, `users/${userKey}`), {
+          ...schoolData,
+          schoolId: newSchoolId,
+          username: adminEmail,
+        });
+
+        // إضافة في userIndex لتسريع تسجيل الدخول
+        await set(ref(db, `userIndex/${adminEmail}`), {
+          schoolId: newSchoolId,
+          role: 'school',
+        });
+
         Alert.alert('نجاح', 'تم إضافة المدرسة بنجاح');
       }
       resetForm();
@@ -146,94 +154,71 @@ export default function SuperAdminScreen({ navigation }) {
   };
 
   const handleDeleteSchool = (id) => {
-    Alert.alert(
-      'تأكيد الحذف',
-      'هل أنت متأكد من رغبتك في حذف هذه المدرسة نهائياً؟',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'حذف',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await remove(ref(db, `schools/${id}`));
-              Alert.alert('نجاح', 'تم حذف المدرسة بنجاح');
-            } catch (error) {
-              Alert.alert('خطأ', 'فشل الحذف: ' + error.message);
+    Alert.alert('تأكيد الحذف', 'هل أنت متأكد من رغبتك في حذف هذه المدرسة نهائياً؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            const schoolToDelete = schools.find(s => s.id === id);
+            await remove(ref(db, `schools/${id}`));
+            if (schoolToDelete && schoolToDelete.email) {
+              const userKey = schoolToDelete.email.replace(/\./g, ',');
+              await remove(ref(db, `users/${userKey}`));
+              await remove(ref(db, `userIndex/${schoolToDelete.email}`));
             }
-          },
+            Alert.alert('نجاح', 'تم حذف المدرسة بنجاح');
+          } catch (error) {
+            Alert.alert('خطأ', 'حدث خطأ أثناء حذف المدرسة: ' + error.message);
+          } finally {
+            setLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const handleUpdateAdminPassword = async () => {
+  const handleUpdateSuperAdminPassword = async () => {
     if (!newAdminPass) {
-      Alert.alert('تنبيه', 'يرجى إدخال كلمة السر الجديدة');
+      Alert.alert('خطأ', 'الرجاء إدخال كلمة المرور الجديدة.');
       return;
     }
-
     setLoading(true);
     try {
-      const adminSettingsRef = ref(db, 'admin_settings/super_admin');
-      await set(adminSettingsRef, {
-        password: newAdminPass,
-        updatedAt: new Date().toISOString()
-      });
-      
-      Alert.alert('نجاح', 'تم تحديث كلمة سر المدير العام بنجاح');
+      await update(ref(db, 'admin_settings/super_admin'), { password: newAdminPass });
+      Alert.alert('نجاح', 'تم تحديث كلمة مرور المدير العام بنجاح.');
       setShowPassModal(false);
       setNewAdminPass('');
     } catch (error) {
-      Alert.alert('خطأ', 'فشل تحديث كلمة السر: ' + error.message);
+      Alert.alert('خطأ', 'حدث خطأ أثناء تحديث كلمة المرور: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderSchoolItem = ({ item, index }) => {
-    const status = checkSubscriptionStatus(item.endDate);
-    return (
-      <View style={styles.schoolCard}>
-        <View style={styles.schoolHeader}>
-          <Text style={styles.schoolNumber}>{index + 1}.</Text>
-          <Text style={styles.schoolName}>{item.name}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
-            <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
-          </View>
-        </View>
-        
-        <View style={styles.schoolInfoRow}>
-          <Text style={styles.schoolDetails}>المستخدم: {item.email}</Text>
-          <Text style={styles.schoolDetails}>كلمة السر: {item.password}</Text>
-        </View>
-        
-        <View style={styles.dateRow}>
-          <Text style={styles.dateText}>من: {formatDate(item.startDate)}</Text>
-          <Text style={styles.dateText}>إلى: {formatDate(item.endDate)}</Text>
-        </View>
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('user_session');
+    navigation.replace('Login');
+  };
 
-        <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.editButton} onPress={() => handleEditPress(item)}>
-            <Text style={styles.actionText}>تعديل</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteSchool(item.id)}>
-            <Text style={styles.actionText}>حذف</Text>
-          </TouchableOpacity>
-        </View>
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007BFF" />
+        <Text style={{ marginTop: 10 }}>جاري تحميل البيانات...</Text>
       </View>
     );
-  };
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       <View style={styles.header}>
+        <Text style={styles.title}>إدارة المدارس 👑</Text>
         <View style={styles.headerRight}>
-          <Text style={styles.title}>لوحة التحكم</Text>
-        </View>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.logoutHeaderBtn} onPress={() => navigation.replace('Login')}>
+          <TouchableOpacity style={styles.logoutHeaderBtn} onPress={handleLogout}>
             <Text style={styles.logoutText}>🚪 خروج</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.changePassHeaderBtn} onPress={() => setShowPassModal(true)}>
@@ -242,115 +227,116 @@ export default function SuperAdminScreen({ navigation }) {
         </View>
       </View>
 
-      <FlatList
-        data={schools}
-        keyExtractor={(item) => item.id}
-        renderItem={renderSchoolItem}
-        ListHeaderComponent={
-          <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>
-              {editingSchoolId ? 'تعديل بيانات المدرسة 📝' : 'إضافة مدرسة جديدة 🏫'}
-            </Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="اسم المدرسة"
-              value={schoolName}
-              onChangeText={setSchoolName}
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="اسم المستخدم للمدرسة"
-              value={adminEmail}
-              onChangeText={setAdminEmail}
-              autoCapitalize="none"
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="كلمة المرور للمدرسة"
-              value={adminPassword}
-              onChangeText={setAdminPassword}
-              autoCapitalize="none"
-            />
+      <ScrollView style={styles.container}>
+        <View style={styles.formContainer}>
+          <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل بيانات المدرسة 📝' : 'إضافة مدرسة جديدة 🏫'}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="اسم المدرسة"
+            value={schoolName}
+            onChangeText={setSchoolName}
+            textAlign="right"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="اسم المستخدم (للمدرسة)"
+            value={adminEmail}
+            onChangeText={setAdminEmail}
+            autoCapitalize="none"
+            textAlign="right"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="كلمة المرور"
+            value={adminPassword}
+            onChangeText={setAdminPassword}
+            textAlign="right"
+          />
 
-            <View style={styles.datePickersRow}>
-              <TouchableOpacity style={styles.dateBtn} onPress={() => setShowStartPicker(true)}>
-                <Text style={styles.dateBtnLabel}>تاريخ البدء</Text>
-                <Text style={styles.dateBtnValue}>{formatDate(startDate)}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.dateBtn} onPress={() => setShowEndPicker(true)}>
-                <Text style={styles.dateBtnLabel}>تاريخ الانتهاء</Text>
-                <Text style={styles.dateBtnValue}>{formatDate(endDate)}</Text>
-              </TouchableOpacity>
-            </View>
-
+          <View style={styles.datePickerContainer}>
+            <TouchableOpacity onPress={() => setShowStartPicker(true)} style={styles.datePickerButton}>
+              <Text style={styles.datePickerButtonText}>📅 تاريخ البدء{'\n'}{formatDate(startDate)}</Text>
+            </TouchableOpacity>
             {showStartPicker && (
               <DateTimePicker
                 value={startDate}
                 mode="date"
                 display="default"
-                onChange={onStartDateChange}
+                onChange={(e, d) => { setShowStartPicker(false); if (d) setStartDate(d); }}
               />
             )}
-
+            <TouchableOpacity onPress={() => setShowEndPicker(true)} style={styles.datePickerButton}>
+              <Text style={styles.datePickerButtonText}>📅 تاريخ الانتهاء{'\n'}{formatDate(endDate)}</Text>
+            </TouchableOpacity>
             {showEndPicker && (
               <DateTimePicker
                 value={endDate}
                 mode="date"
                 display="default"
-                onChange={onEndDateChange}
+                onChange={(e, d) => { setShowEndPicker(false); if (d) setEndDate(d); }}
               />
             )}
-
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchool} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>{editingSchoolId ? 'تحديث البيانات' : 'إضافة المدرسة'}</Text>
-              )}
-            </TouchableOpacity>
-
-            {editingSchoolId && (
-              <TouchableOpacity style={styles.cancelButton} onPress={resetForm}>
-                <Text style={styles.buttonText}>إلغاء التعديل</Text>
-              </TouchableOpacity>
-            )}
           </View>
-        }
-        contentContainerStyle={styles.listContent}
-      />
 
-      <Modal
-        visible={showPassModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowPassModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchool} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : (
+              <Text style={styles.saveButtonText}>{editingSchoolId ? 'تحديث المدرسة' : 'إضافة مدرسة'}</Text>
+            )}
+          </TouchableOpacity>
+          {editingSchoolId && (
+            <TouchableOpacity style={styles.cancelEditButton} onPress={resetForm}>
+              <Text style={styles.cancelEditButtonText}>إلغاء التعديل</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={styles.listTitle}>المدارس المسجلة ({schools.length})</Text>
+        <FlatList
+          data={schools}
+          keyExtractor={(item) => item.id}
+          scrollEnabled={false}
+          renderItem={({ item }) => {
+            const status = checkSubscriptionStatus(item.endDate);
+            return (
+              <View style={styles.schoolCard}>
+                <View style={styles.schoolInfo}>
+                  <Text style={styles.schoolName}>{item.name}</Text>
+                  <Text style={styles.schoolDetail}>المستخدم: {item.email}</Text>
+                  <Text style={styles.schoolDetail}>كلمة السر: {item.password}</Text>
+                  <Text style={[styles.schoolDetail, { color: status.color }]}>الاشتراك: {status.text}</Text>
+                  <Text style={styles.schoolDetail}>من: {formatDate(item.startDate)} إلى: {formatDate(item.endDate)}</Text>
+                </View>
+                <View style={styles.schoolActions}>
+                  <TouchableOpacity style={styles.editButton} onPress={() => handleEditPress(item)}>
+                    <Text style={styles.editButtonText}>تعديل</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteSchool(item.id)}>
+                    <Text style={styles.deleteButtonText}>حذف</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={<Text style={styles.emptyListText}>لا توجد مدارس مسجلة.</Text>}
+        />
+      </ScrollView>
+
+      <Modal animationType="fade" transparent visible={showPassModal} onRequestClose={() => setShowPassModal(false)}>
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
             <Text style={styles.modalTitle}>تغيير كلمة سر المدير العام</Text>
             <TextInput
               style={styles.input}
-              placeholder="أدخل كلمة السر الجديدة"
+              placeholder="كلمة المرور الجديدة"
               value={newAdminPass}
               onChangeText={setNewAdminPass}
-              autoCapitalize="none"
+              textAlign="right"
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, styles.saveBtn]} 
-                onPress={handleUpdateAdminPassword}
-                disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalBtnText}>حفظ</Text>}
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleUpdateSuperAdminPassword}>
+                <Text style={styles.modalBtnText}>حفظ</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalBtn, styles.cancelBtn]} 
-                onPress={() => setShowPassModal(false)}
-              >
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowPassModal(false)}>
                 <Text style={styles.modalBtnText}>إلغاء</Text>
               </TouchableOpacity>
             </View>
@@ -363,65 +349,81 @@ export default function SuperAdminScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { 
-    padding: 15, 
-    backgroundColor: '#FFF', 
-    flexDirection: 'row-reverse', 
-    justifyContent: 'space-between', 
+  header: {
+    padding: 15,
+    backgroundColor: '#FFF',
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    elevation: 2
+    elevation: 2,
   },
-  headerRight: { flexDirection: 'row-reverse', alignItems: 'center' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
-  
-  logoutHeaderBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8, marginRight: 8 },
+  logoutHeaderBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8, marginLeft: 8 },
   logoutText: { fontSize: 12, color: '#EF4444', fontWeight: '700' },
-  
   changePassHeaderBtn: { padding: 8, backgroundColor: '#F1F5F9', borderRadius: 8 },
   changePassText: { fontSize: 12, color: '#3B82F6', fontWeight: '600' },
-  
-  listContent: { padding: 15 },
-  
-  formContainer: { backgroundColor: '#FFF', padding: 20, borderRadius: 16, marginBottom: 25, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  container: { flex: 1, padding: 15 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
+  formContainer: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 20, elevation: 3 },
   formTitle: { fontSize: 16, fontWeight: '700', marginBottom: 15, color: '#1E293B', textAlign: 'right' },
-  input: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'right', fontSize: 14 },
-  
-  datePickersRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 15 },
-  dateBtn: { flex: 0.48, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
-  dateBtnLabel: { fontSize: 11, color: '#64748B', marginBottom: 4 },
-  dateBtnValue: { fontSize: 13, color: '#1E293B', fontWeight: '600' },
-  
-  saveButton: { backgroundColor: '#3B82F6', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 5 },
-  cancelButton: { backgroundColor: '#94A3B8', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 8 },
-  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  
-  schoolCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-  schoolHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 10 },
-  schoolNumber: { fontSize: 16, fontWeight: 'bold', color: '#3B82F6', marginLeft: 8 },
-  schoolName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#1E293B', textAlign: 'right' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  
-  schoolInfoRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 8 },
-  schoolDetails: { fontSize: 13, color: '#475569', textAlign: 'right' },
-  
-  dateRow: { flexDirection: 'row-reverse', justifyContent: 'space-around', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginBottom: 10 },
-  dateText: { fontSize: 12, color: '#64748B' },
-  
-  actionButtons: { flexDirection: 'row', justifyContent: 'flex-start' },
-  editButton: { backgroundColor: '#F1F5F9', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8, marginRight: 10 },
-  deleteButton: { backgroundColor: '#FEE2E2', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
-  actionText: { fontSize: 12, fontWeight: '700', color: '#3B82F6' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#FFF', padding: 25, borderRadius: 20, width: '85%' },
-  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 20, textAlign: 'center', color: '#1E293B' },
-  modalButtons: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 },
-  modalBtn: { flex: 0.45, padding: 12, borderRadius: 10, alignItems: 'center' },
-  saveBtn: { backgroundColor: '#3B82F6' },
-  cancelBtn: { backgroundColor: '#94A3B8' },
-  modalBtnText: { color: '#FFF', fontWeight: 'bold' }
+  input: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    fontSize: 16,
+    backgroundColor: '#F8FAFC',
+  },
+  datePickerContainer: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 10 },
+  datePickerButton: {
+    backgroundColor: '#F1F5F9',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 0.48,
+  },
+  datePickerButtonText: { color: '#1E293B', fontSize: 13, textAlign: 'center' },
+  saveButton: { backgroundColor: '#007BFF', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 5, elevation: 2 },
+  saveButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  cancelEditButton: { backgroundColor: '#EF4444', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 8, elevation: 2 },
+  cancelEditButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  listTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 10, textAlign: 'right' },
+  schoolCard: {
+    backgroundColor: '#FFF',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  schoolInfo: { flex: 1, alignItems: 'flex-end' },
+  schoolName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 4 },
+  schoolDetail: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  schoolActions: { flexDirection: 'column', alignItems: 'center', marginLeft: 10 },
+  editButton: { backgroundColor: '#DBEAFE', padding: 8, borderRadius: 8, marginBottom: 8, minWidth: 60, alignItems: 'center' },
+  editButtonText: { color: '#3B82F6', fontWeight: 'bold', fontSize: 12 },
+  deleteButton: { backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8, minWidth: 60, alignItems: 'center' },
+  deleteButtonText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  emptyListText: { textAlign: 'center', color: '#666', marginTop: 20, fontSize: 16 },
+  centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'stretch',
+    elevation: 5,
+    width: '85%',
+  },
+  modalTitle: { marginBottom: 15, textAlign: 'center', fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
+  modalButtons: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 15 },
+  modalSaveBtn: { backgroundColor: '#007BFF', padding: 10, borderRadius: 8, flex: 0.45, alignItems: 'center' },
+  modalCancelBtn: { backgroundColor: '#94A3B8', padding: 10, borderRadius: 8, flex: 0.45, alignItems: 'center' },
+  modalBtnText: { color: 'white', fontWeight: 'bold', textAlign: 'center' },
 });

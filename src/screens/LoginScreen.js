@@ -1,33 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  ActivityIndicator, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
-  Dimensions,
   StatusBar
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, get, update } from 'firebase/database';
-import { db } from '../firebaseConfig'; 
+import { db } from '../firebaseConfig';
 import { translations } from '../i18n';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
-
-const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const navigation = useNavigation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false); 
-  const [isPasswordSecure, setIsPasswordSecure] = useState(true); 
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isPasswordSecure, setIsPasswordSecure] = useState(true);
   const [loading, setLoading] = useState(false);
   const [lang, setLang] = useState('ar');
   const t = translations[lang];
@@ -40,7 +37,6 @@ export default function LoginScreen() {
     try {
       const savedUser = await AsyncStorage.getItem('remembered_username');
       const isRemembered = await AsyncStorage.getItem('remember_me_status');
-
       if (isRemembered === 'true' && savedUser) {
         setUsername(savedUser);
         setRememberMe(true);
@@ -59,8 +55,7 @@ export default function LoginScreen() {
 
   const navigateToDashboard = (userRole, userData, schoolId) => {
     const params = { schoolId, user: userData };
-    
-    // تسجيل التوكن للتنبيهات قبل الانتقال للشاشة التالية
+
     registerForPushNotificationsAsync().then(token => {
       if (token && userData.username) {
         update(ref(db, `users/${userData.username}`), { expoPushToken: token });
@@ -80,7 +75,6 @@ export default function LoginScreen() {
     }
   };
 
-  // دالة تشفير كلمة المرور بسيطة وآمنة
   const hashPassword = (password) => {
     let hash = 0;
     if (password.length === 0) return hash.toString();
@@ -93,8 +87,8 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    const enteredUser = username ? username.trim() : "";
-    const enteredPass = password ? password.trim() : "";
+    const enteredUser = username ? username.trim() : '';
+    const enteredPass = password ? password.trim() : '';
 
     if (!enteredUser || !enteredPass) {
       Alert.alert('تنبيه', 'الرجاء إدخال اسم المستخدم وكلمة المرور.');
@@ -108,7 +102,6 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('remember_me_status', 'true');
       } else {
         await AsyncStorage.removeItem('remembered_username');
-        await AsyncStorage.removeItem('remembered_password');
         await AsyncStorage.setItem('remember_me_status', 'false');
       }
 
@@ -116,15 +109,11 @@ export default function LoginScreen() {
       const adminRef = ref(db, 'admin_settings/super_admin');
       const adminSnapshot = await get(adminRef);
       const adminData = adminSnapshot.val();
-
       const correctAdminPass = adminData ? adminData.password : 'admin123';
-
-      // نقبل كلمة السر سواء كانت مشفرة (القديمة) أو نصاً عادياً (الجديدة) لتسهيل الدخول
       const hashedEnteredPass = hashPassword(enteredPass);
-      // خيار دخول طوارئ مضمون 100% في حال وجود مشكلة في مزامنة قاعدة البيانات
-      const isEmergencyPass = enteredPass === 'admin123'; // يمكنك تغييرها لاحقاً
-      const isAdminAuthenticated = (enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') && 
-                                   (enteredPass === correctAdminPass || hashedEnteredPass === correctAdminPass || isEmergencyPass);
+      const isAdminAuthenticated =
+        (enteredUser === 'admin' || enteredUser === 'alalzyadi1986@gmail.com') &&
+        (enteredPass === correctAdminPass || hashedEnteredPass === correctAdminPass || enteredPass === 'admin123');
 
       if (isAdminAuthenticated) {
         const sessionData = { username: enteredUser, role: 'superadmin' };
@@ -134,330 +123,209 @@ export default function LoginScreen() {
         return;
       }
 
-      // 2. جلب المدارس
-      const schoolsRef = ref(db, 'schools');
-      const snapshot = await get(schoolsRef);
-      const allSchools = snapshot.val();
+      // 2. البحث في userIndex أولاً لمعرفة schoolId الخاص بالمستخدم
+      // هذا يمنع جلب بيانات جميع المدارس دفعة واحدة
+      const userIndexRef = ref(db, `userIndex/${enteredUser}`);
+      const userIndexSnapshot = await get(userIndexRef);
+      const userIndex = userIndexSnapshot.val();
 
-      if (allSchools) {
-        for (const schoolId in allSchools) {
-          const schoolData = allSchools[schoolId];
-          const active = isSubscriptionActive(schoolData.endDate);
+      if (userIndex && userIndex.schoolId) {
+        const { schoolId, role } = userIndex;
 
-          // مدير المدرسة
-          if (schoolData.email === enteredUser && schoolData.password === enteredPass) {
-            const sessionData = { ...schoolData, id: schoolId, role: 'school' };
-            await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
-            setLoading(false);
-            navigateToDashboard('school', sessionData, schoolId);
-            return;
-          }
+        // التحقق من صلاحية اشتراك المدرسة
+        const schoolSnapshot = await get(ref(db, `schools/${schoolId}`));
+        const schoolData = schoolSnapshot.val();
 
-          if (!active) {
-            let belongsToThisSchool = false;
-            if (schoolData.drivers && schoolData.drivers[enteredUser]) belongsToThisSchool = true;
-            if (schoolData.staff && schoolData.staff[enteredUser]) belongsToThisSchool = true;
-            if (schoolData.parents && schoolData.parents[enteredUser]) belongsToThisSchool = true;
+        if (!schoolData || !isSubscriptionActive(schoolData.endDate)) {
+          Alert.alert('خطأ', 'اشتراك المدرسة غير نشط أو غير موجود.');
+          setLoading(false);
+          return;
+        }
 
-            if (belongsToThisSchool) {
+        // جلب بيانات المستخدم من مدرسته فقط
+        const rolePath = role === 'school' ? null : `schools/${schoolId}/${role}s/${enteredUser}`;
+
+        let userData = null;
+
+        if (role === 'school') {
+          // مدير المدرسة - بياناته في users
+          const userRef = ref(db, `users/${enteredUser.replace('.', ',')}`);
+          const userSnap = await get(userRef);
+          userData = userSnap.val();
+        } else {
+          // سائق أو موظف أو ولي أمر
+          const userRef = ref(db, rolePath);
+          const userSnap = await get(userRef);
+          userData = userSnap.val();
+        }
+
+        if (!userData || userData.password !== enteredPass) {
+          Alert.alert('خطأ', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
+          setLoading(false);
+          return;
+        }
+
+        const sessionData = {
+          ...userData,
+          username: enteredUser,
+          role,
+          schoolId,
+          schoolName: schoolData.name,
+        };
+        await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
+        setLoading(false);
+        navigateToDashboard(role, sessionData, schoolId);
+        return;
+      }
+
+      // 3. إذا لم يوجد في userIndex، نبحث في users (للتوافق مع البيانات القديمة)
+      const usersRef = ref(db, 'users');
+      const usersSnapshot = await get(usersRef);
+      const allUsers = usersSnapshot.val();
+
+      if (allUsers) {
+        for (const userId in allUsers) {
+          const userData = allUsers[userId];
+          if (
+            (userData.username === enteredUser || userData.email === enteredUser) &&
+            userData.password === enteredPass
+          ) {
+            const schoolSnapshot = await get(ref(db, `schools/${userData.schoolId}`));
+            const schoolData = schoolSnapshot.val();
+
+            if (!schoolData || !isSubscriptionActive(schoolData.endDate)) {
+              Alert.alert('خطأ', 'اشتراك المدرسة غير نشط أو غير موجود.');
               setLoading(false);
-              Alert.alert('اشتراك منتهي', 'عذراً، اشتراك المدرسة منتهي. يرجى مراجعة إدارة المدرسة للتجديد.');
               return;
             }
-            continue;
-          }
 
-          // Drivers
-          if (schoolData.drivers) {
-            for (const driverKey in schoolData.drivers) {
-              const driver = schoolData.drivers[driverKey];
-              if (driverKey === enteredUser && driver.password === enteredPass) {
-                const sessionData = { ...driver, username: driverKey, role: 'driver' };
-                await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
-                setLoading(false);
-                navigateToDashboard('driver', sessionData, schoolId);
-                return;
-              }
-            }
-          }
-
-          // Staff
-          if (schoolData.staff) {
-            for (const staffKey in schoolData.staff) {
-              const staff = schoolData.staff[staffKey];
-              if (staffKey === enteredUser && staff.password === enteredPass) {
-                const sessionData = { ...staff, username: staffKey, role: 'staff' };
-                await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
-                setLoading(false);
-                navigateToDashboard('staff', sessionData, schoolId);
-                return;
-              }
-            }
-          }
-
-          // Parents
-          if (schoolData.parents) {
-            for (const parentKey in schoolData.parents) {
-              const parent = schoolData.parents[parentKey];
-              if (parentKey === enteredUser && parent.password === enteredPass) {
-                const sessionData = { ...parent, username: parentKey, role: 'parent' };
-                await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
-                setLoading(false);
-                navigateToDashboard('parent', sessionData, schoolId);
-                return;
-              }
-            }
+            const sessionData = { ...userData, id: userId, schoolName: schoolData.name };
+            await AsyncStorage.setItem('user_session', JSON.stringify(sessionData));
+            setLoading(false);
+            navigateToDashboard(userData.role, sessionData, userData.schoolId);
+            return;
           }
         }
       }
 
+      Alert.alert('خطأ', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
       setLoading(false);
-      Alert.alert('خطأ في الدخول', 'اسم المستخدم أو كلمة المرور غير صحيحة.');
-
     } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
       setLoading(false);
-      console.error("Login Error:", error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء محاولة تسجيل الدخول.');
     }
   };
 
   return (
-    <View style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.topDecoration} />
-      
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"} 
-        style={styles.container}
-      >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContainer} 
-          bounces={false} 
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.headerArea}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoEmoji}>🚌</Text>
-            </View>
-            <Text style={styles.title}>تطبيق باصات المدارس</Text>
-            <Text style={styles.subtitle}>نظام التتبع الذكي والمتكامل</Text>
-          </View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="#f8f8f8" />
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>{t.loginTitle}</Text>
+        </View>
 
-          <View style={styles.formCard}>
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
-              <TouchableOpacity onPress={() => setLang(lang === 'ar' ? 'en' : 'ar')} style={styles.langSwitch}>
-                <Text style={styles.langSwitchText}>{lang === 'ar' ? 'English' : 'عربي'}</Text>
-              </TouchableOpacity>
-              <Text style={styles.welcomeText}>{t.login}</Text>
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.username}</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput 
-                  style={styles.input}
-                  placeholder={lang === 'ar' ? "أدخل اسم المستخدم" : "Enter username"}
-                  placeholderTextColor="#94A3B8"
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                />
-              </View>
-            </View>
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            placeholder={t.usernamePlaceholder}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={t.passwordPlaceholder}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={isPasswordSecure}
+          />
+          <TouchableOpacity
+            style={styles.togglePasswordVisibility}
+            onPress={() => setIsPasswordSecure(!isPasswordSecure)}
+          >
+            <Text style={styles.togglePasswordVisibilityText}>
+              {isPasswordSecure ? t.showPassword : t.hidePassword}
+            </Text>
+          </TouchableOpacity>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.password}</Text>
-              <View style={styles.passwordInputContainer}>
-                <TouchableOpacity 
-                  style={styles.visibilityButton} 
-                  onPress={() => setIsPasswordSecure(!isPasswordSecure)}
-                >
-                  <Text style={styles.visibilityButtonText}>
-                    {isPasswordSecure ? "👁️" : "🙈"}
-                  </Text>
-                </TouchableOpacity>
-                <TextInput 
-                  style={styles.passwordField}
-                  placeholder={lang === 'ar' ? "أدخل كلمة المرور" : "Enter password"}
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={isPasswordSecure}
-                  value={password}
-                  onChangeText={setPassword}
-                  autoCapitalize="none"
-                />
-              </View>
-            </View>
-
-            <View style={styles.optionsRow}>
-              <TouchableOpacity 
-                style={styles.checkboxContainer} 
-                onPress={() => setRememberMe(!rememberMe)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.checkboxLabel}>{lang === 'ar' ? 'تذكرني' : 'Remember Me'}</Text>
-                <View style={[styles.customCheckbox, rememberMe && styles.customCheckboxChecked]}>
-                  {rememberMe && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
-              onPress={handleLogin} 
-              disabled={loading}
+          <View style={styles.rememberMeContainer}>
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => setRememberMe(!rememberMe)}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.loginButtonText}>{t.login}</Text>
-              )}
+              <View style={[styles.customCheckbox, rememberMe && styles.customCheckboxChecked]} />
+              <Text style={styles.checkboxLabel}>{t.rememberMe}</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.supportTitle}>لطلب الاشتراك أو الدعم</Text>
-            <View style={styles.contactBadge}>
-              <Text style={styles.contactText}>📞 الهاتف: 999999</Text>
-              <Text style={[styles.contactText, { marginTop: 5 }]}>📧 البريد: 9999999</Text>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginButtonText}>{t.loginButton}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  topDecoration: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: width * 0.5,
-    backgroundColor: '#3B82F6',
-    borderBottomLeftRadius: 60,
-    borderBottomRightRadius: 60,
-  },
   container: {
     flex: 1,
+    backgroundColor: '#f8f8f8',
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    paddingBottom: 30,
-  },
-  headerArea: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#FFF',
-    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    marginBottom: 15,
-  },
-  logoEmoji: {
-    fontSize: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFF',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 5,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  formCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
     padding: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
   },
-  welcomeText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E293B',
+  header: {
+    marginBottom: 40,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333',
     textAlign: 'center',
   },
-  langSwitch: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0'
-  },
-  langSwitchText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#3B82F6'
-  },
-  inputGroup: {
-    marginBottom: 15,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 6,
-    textAlign: 'right',
-  },
-  inputWrapper: {
-    backgroundColor: '#F1F5F9',
+  form: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#fff',
+    padding: 20,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   input: {
-    padding: 12,
-    fontSize: 15,
-    textAlign: 'right',
-    color: '#1E293B',
-  },
-  passwordInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
+    height: 50,
+    borderColor: '#ddd',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  passwordField: {
-    flex: 1,
-    padding: 12,
-    fontSize: 15,
-    textAlign: 'right',
-    color: '#1E293B',
-  },
-  visibilityButton: {
-    paddingHorizontal: 12,
-  },
-  visibilityButtonText: {
+    borderRadius: 8,
+    marginBottom: 15,
+    paddingHorizontal: 15,
     fontSize: 16,
+    textAlign: 'right',
   },
-  optionsRow: {
+  togglePasswordVisibility: {
+    alignSelf: 'flex-end',
+    marginBottom: 15,
+  },
+  togglePasswordVisibilityText: {
+    color: '#007BFF',
+    fontSize: 14,
+  },
+  rememberMeContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
@@ -482,53 +350,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   customCheckboxChecked: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  checkmark: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: 'bold',
+    backgroundColor: '#007BFF',
+    borderColor: '#007BFF',
   },
   loginButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 10,
-    padding: 14,
+    backgroundColor: '#007BFF',
+    paddingVertical: 15,
+    borderRadius: 8,
     alignItems: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  loginButtonDisabled: {
-    backgroundColor: '#94A3B8',
-    shadowOpacity: 0,
+    justifyContent: 'center',
+    height: 50,
   },
   loginButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  footer: {
-    marginTop: 25,
-    alignItems: 'center',
-  },
-  supportTitle: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginBottom: 8,
-  },
-  contactBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 15,
-    alignItems: 'center',
-  },
-  contactText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
