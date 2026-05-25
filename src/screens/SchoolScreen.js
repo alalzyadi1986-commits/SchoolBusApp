@@ -117,10 +117,18 @@ export default function SchoolScreen({ route, navigation }) {
           await set(ref(db, `${path}/${formData.username}`), formData);
 
           // إضافة في userIndex لتسريع تسجيل الدخول
-          const role = activeTab === 'drivers' ? 'driver'
-            : activeTab === 'staff' ? 'staff'
-            : activeTab === 'parents' ? 'parent'
-            : activeTab === 'managers' ? 'manager' : activeTab;
+const role =
+  activeTab === 'drivers'
+    ? 'driver'
+    : activeTab === 'staff'
+    ? 'staff'
+    : activeTab === 'parents'
+    ? 'parent'
+    : activeTab === 'students'
+    ? 'student'
+    : activeTab === 'managers'
+    ? 'manager'
+    : activeTab;
 
           await set(ref(db, `userIndex/${formData.username}`), { schoolId, role });
         }

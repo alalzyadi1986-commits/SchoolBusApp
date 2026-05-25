@@ -158,41 +158,45 @@ export default function LoginScreen() {
     return new Date(endDate) > new Date();
   };
 
-  const navigateToDashboard = (userRole, userData, schoolId) => {
-    const params = {
-      schoolId,
-      user: userData,
-    };
-
-    registerForPushNotificationsAsync()
-      .then(token => {
-        if (token && userData.username) {
-          const safeUser = userData.username.replace(/\./g, ',');
-
-          update(ref(db, `users/${safeUser}`), {
-            expoPushToken: token,
-          });
-        }
-      })
-      .catch(() => {});
-
-    if (userRole === 'superadmin') {
-      navigation.replace('SuperAdminScreen', params);
-    } else if (userRole === 'school') {
-      navigation.replace('SchoolScreen', params);
-    } else if (userRole === 'driver') {
-      navigation.replace('DriverScreen', params);
-    } else if (userRole === 'staff') {
-      navigation.replace('StaffScreen', params);
-    } else if (userRole === 'parent') {
-      navigation.replace('ParentScreen', params);
-    }
+ const navigateToDashboard = (userRole, userData, schoolId) => {
+  const params = {
+    schoolId,
+    user: userData,
   };
 
-  const hashPassword = (pw) => {
-    let hash = 0;
+  registerForPushNotificationsAsync()
+    .then(token => {
+      if (token && userData.username) {
+        const safeUser = userData.username.replace(/\./g, ',');
 
-    for (let i = 0; i < pw.length; i++) {
+        update(ref(db, `users/${safeUser}`), {
+          expoPushToken: token,
+        });
+      }
+    })
+    .catch(() => {});
+
+  if (userRole === 'superadmin') {
+    navigation.replace('SuperAdminScreen', params);
+
+  } else if (userRole === 'school') {
+    navigation.replace('SchoolScreen', params);
+
+  } else if (userRole === 'driver') {
+    navigation.replace('DriverScreen', params);
+
+  } else if (userRole === 'staff') {
+    navigation.replace('StaffScreen', params);
+
+  } else if (userRole === 'parent') {
+    navigation.replace('ParentScreen', params);
+  }
+};
+
+const hashPassword = (pw) => {
+  let hash = 0;
+
+  for (let i = 0; i < pw.length; i++) {
       const char = pw.charCodeAt(i);
 
       hash = ((hash << 5) - hash) + char;
@@ -311,12 +315,26 @@ if (enteredUser === 'admin') {
 
         userData = snap.val();
       } else {
-        const snap = await getWithTimeout(
-          ref(db, `schools/${schoolId}/${role}s/${safeUser}`),
-          8000
-        );
+let rolePath = '';
 
-        userData = snap.val();
+if (role === 'driver') {
+  rolePath = 'drivers';
+} else if (role === 'staff') {
+  rolePath = 'staff';
+} else if (role === 'parent') {
+  rolePath = 'parents';
+} else if (role === 'student') {
+  rolePath = 'students';
+} else if (role === 'manager') {
+  rolePath = 'managers';
+}
+
+const snap = await getWithTimeout(
+  ref(db, `schools/${schoolId}/${rolePath}/${safeUser}`),
+  8000
+);
+
+userData = snap.val();
       }
 
       if (
@@ -845,6 +863,11 @@ const styles = StyleSheet.create({
 
   contactButtonText: {
     color: '#64748B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});const styles = StyleSheet.create({
+  someStyle: {
     fontSize: 13,
     fontWeight: '700',
   },
