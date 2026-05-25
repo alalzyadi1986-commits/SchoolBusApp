@@ -20,7 +20,7 @@ import { ref, get, update } from 'firebase/database';
 import { db } from '../firebaseConfig';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 const i18n = {
   ar: {
@@ -38,7 +38,7 @@ const i18n = {
     errorEmpty: 'الرجاء إدخال اسم المستخدم وكلمة المرور.',
     errorInactive: 'اشتراك المدرسة غير نشط أو غير موجود.',
     errorWrong: 'اسم المستخدم أو كلمة المرور غير صحيحة.',
-    errorGeneral: 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.',
+    errorGeneral: 'حدث خطأ أثناء تسجيل الدخول.',
   },
 
   en: {
@@ -56,7 +56,7 @@ const i18n = {
     errorEmpty: 'Please enter your username and password.',
     errorInactive: 'School subscription is inactive or not found.',
     errorWrong: 'Incorrect username or password.',
-    errorGeneral: 'An error occurred. Please try again.',
+    errorGeneral: 'An error occurred.',
   },
 };
 
@@ -143,7 +143,9 @@ export default function LoginScreen() {
       if (isRemembered === 'true' && savedUser) {
         setUsername(savedUser);
 
-        if (savedPass) setPassword(savedPass);
+        if (savedPass) {
+          setPassword(savedPass);
+        }
 
         setRememberMe(true);
       }
@@ -158,45 +160,74 @@ export default function LoginScreen() {
     return new Date(endDate) > new Date();
   };
 
- const navigateToDashboard = (userRole, userData, schoolId) => {
-  const params = {
-    schoolId,
-    user: userData,
-  };
+  const savePushToken = async (role, schoolId, username, token) => {
+    try {
+      const safeUser = username.replace(/\./g, ',');
 
-  registerForPushNotificationsAsync()
-    .then(token => {
-      if (token && userData.username) {
-        const safeUser = userData.username.replace(/\./g, ',');
+      let userPath = '';
 
-        update(ref(db, `users/${safeUser}`), {
+      if (role === 'school') {
+        userPath = `users/${safeUser}`;
+      } else if (role === 'driver') {
+        userPath = `schools/${schoolId}/drivers/${safeUser}`;
+      } else if (role === 'staff') {
+        userPath = `schools/${schoolId}/staff/${safeUser}`;
+      } else if (role === 'parent') {
+        userPath = `schools/${schoolId}/parents/${safeUser}`;
+      }
+
+      if (userPath) {
+        await update(ref(db, userPath), {
           expoPushToken: token,
         });
       }
-    })
-    .catch(() => {});
 
-  if (userRole === 'superadmin') {
-    navigation.replace('SuperAdminScreen', params);
+    } catch (e) {
+      console.log('Push token save error:', e);
+    }
+  };
 
-  } else if (userRole === 'school') {
-    navigation.replace('SchoolScreen', params);
+  const navigateToDashboard = async (userRole, userData, schoolId) => {
+    const params = {
+      schoolId,
+      user: userData,
+    };
 
-  } else if (userRole === 'driver') {
-    navigation.replace('DriverScreen', params);
+    try {
+      const token = await registerForPushNotificationsAsync();
 
-  } else if (userRole === 'staff') {
-    navigation.replace('StaffScreen', params);
+      if (token && userData?.username) {
+        await savePushToken(
+          userRole,
+          schoolId,
+          userData.username,
+          token
+        );
+      }
 
-  } else if (userRole === 'parent') {
-    navigation.replace('ParentScreen', params);
-  }
-};
+    } catch (e) {}
 
-const hashPassword = (pw) => {
-  let hash = 0;
+    if (userRole === 'superadmin') {
+      navigation.replace('SuperAdminScreen', params);
 
-  for (let i = 0; i < pw.length; i++) {
+    } else if (userRole === 'school') {
+      navigation.replace('SchoolScreen', params);
+
+    } else if (userRole === 'driver') {
+      navigation.replace('DriverScreen', params);
+
+    } else if (userRole === 'staff') {
+      navigation.replace('StaffScreen', params);
+
+    } else if (userRole === 'parent') {
+      navigation.replace('ParentScreen', params);
+    }
+  };
+
+  const hashPassword = (pw) => {
+    let hash = 0;
+
+    for (let i = 0; i < pw.length; i++) {
       const char = pw.charCodeAt(i);
 
       hash = ((hash << 5) - hash) + char;
@@ -219,62 +250,75 @@ const hashPassword = (pw) => {
 
     try {
       if (rememberMe) {
-        await AsyncStorage.setItem('remembered_username', enteredUser);
-        await AsyncStorage.setItem('remembered_password', enteredPass);
-        await AsyncStorage.setItem('remember_me_status', 'true');
+        await AsyncStorage.setItem(
+          'remembered_username',
+          enteredUser
+        );
+
+        await AsyncStorage.setItem(
+          'remembered_password',
+          enteredPass
+        );
+
+        await AsyncStorage.setItem(
+          'remember_me_status',
+          'true'
+        );
+
       } else {
         await AsyncStorage.removeItem('remembered_username');
         await AsyncStorage.removeItem('remembered_password');
-        await AsyncStorage.setItem('remember_me_status', 'false');
+
+        await AsyncStorage.setItem(
+          'remember_me_status',
+          'false'
+        );
       }
 
-// تسجيل دخول المدير العام الحقيقي
-if (enteredUser === 'admin') {
+      // تسجيل دخول المدير العام
+      if (enteredUser === 'admin') {
 
-  const adminSnapshot = await getWithTimeout(
-    ref(db, 'admin_settings/super_admin'),
-    8000
-  );
+        const adminSnapshot = await getWithTimeout(
+          ref(db, 'admin_settings/super_admin'),
+          8000
+        );
 
-  const adminData = adminSnapshot.val();
+        const adminData = adminSnapshot.val();
 
-  if (
-    adminData &&
-    enteredPass === adminData.password
-  ) {
+        if (
+          adminData &&
+          enteredPass === adminData.password
+        ) {
 
-    const sessionData = {
-      username: 'admin',
-      role: 'superadmin',
-    };
+          const sessionData = {
+            username: 'admin',
+            role: 'superadmin',
+          };
 
-    await AsyncStorage.setItem(
-      'user_session',
-      JSON.stringify(sessionData)
-    );
+          await AsyncStorage.setItem(
+            'user_session',
+            JSON.stringify(sessionData)
+          );
 
-    setLoading(false);
+          setLoading(false);
 
-    navigateToDashboard(
-      'superadmin',
-      sessionData,
-      null
-    );
+          await navigateToDashboard(
+            'superadmin',
+            sessionData,
+            null
+          );
 
-    return;
+          return;
+        }
 
-  } else {
+        Alert.alert('❌', t.errorWrong);
+        setLoading(false);
+        return;
+      }
 
-    Alert.alert('❌', t.errorWrong);
-    setLoading(false);
-    return;
-  }
-}
-
-      // إنشاء مفتاح آمن للبريد الإلكتروني
       const safeUser = enteredUser.replace(/\./g, ',');
 
-      // التحقق من فهرس المستخدم
+      // البحث في الفهرس
       const userIndexSnapshot = await getWithTimeout(
         ref(db, `userIndex/${safeUser}`),
         8000
@@ -290,7 +334,7 @@ if (enteredUser === 'admin') {
 
       const { schoolId, role } = userIndex;
 
-      // التحقق من بيانات المدرسة
+      // التحقق من المدرسة
       const schoolSnapshot = await getWithTimeout(
         ref(db, `schools/${schoolId}`),
         8000
@@ -298,43 +342,53 @@ if (enteredUser === 'admin') {
 
       const schoolData = schoolSnapshot.val();
 
-      if (!schoolData || !isSubscriptionActive(schoolData.endDate)) {
+      if (
+        !schoolData ||
+        !isSubscriptionActive(schoolData.endDate)
+      ) {
         Alert.alert('❌', t.errorInactive);
         setLoading(false);
         return;
       }
 
-      // تحميل بيانات المستخدم الخاصة بهذه المدرسة فقط
       let userData = null;
 
+      // حساب المدرسة
       if (role === 'school') {
+
         const snap = await getWithTimeout(
           ref(db, `users/${safeUser}`),
           8000
         );
 
         userData = snap.val();
+
       } else {
-let rolePath = '';
 
-if (role === 'driver') {
-  rolePath = 'drivers';
-} else if (role === 'staff') {
-  rolePath = 'staff';
-} else if (role === 'parent') {
-  rolePath = 'parents';
-} else if (role === 'student') {
-  rolePath = 'students';
-} else if (role === 'manager') {
-  rolePath = 'managers';
-}
+        let rolePath = '';
 
-const snap = await getWithTimeout(
-  ref(db, `schools/${schoolId}/${rolePath}/${safeUser}`),
-  8000
-);
+        if (role === 'driver') {
+          rolePath = 'drivers';
 
-userData = snap.val();
+        } else if (role === 'staff') {
+          rolePath = 'staff';
+
+        } else if (role === 'parent') {
+          rolePath = 'parents';
+
+        } else if (role === 'manager') {
+          rolePath = 'managers';
+        }
+
+        const snap = await getWithTimeout(
+          ref(
+            db,
+            `schools/${schoolId}/${rolePath}/${safeUser}`
+          ),
+          8000
+        );
+
+        userData = snap.val();
       }
 
       if (
@@ -364,14 +418,18 @@ userData = snap.val();
 
       setLoading(false);
 
-      navigateToDashboard(role, sessionData, schoolId);
+      await navigateToDashboard(
+        role,
+        sessionData,
+        schoolId
+      );
 
     } catch (error) {
       console.error('Login error:', error);
 
       Alert.alert(
-        '❌ خطأ',
-        'حدث خطأ أثناء تسجيل الدخول. تحقق من الإنترنت أو البيانات.'
+        '❌',
+        t.errorGeneral
       );
 
       setLoading(false);
@@ -384,6 +442,7 @@ userData = snap.val();
 
   return (
     <View style={styles.container}>
+
       <StatusBar
         barStyle="light-content"
         backgroundColor="#0A1628"
@@ -412,12 +471,15 @@ userData = snap.val();
               { opacity: langAnim }
             ]}
           >
-            {lang === 'ar' ? '🇬🇧 EN' : '🇸🇦 عر'}
+            {lang === 'ar'
+              ? '🇬🇧 EN'
+              : '🇸🇦 عر'}
           </Animated.Text>
         </TouchableOpacity>
       </Animated.View>
 
       <View style={styles.content}>
+
         <Animated.View
           style={[
             styles.logoSection,
@@ -442,15 +504,20 @@ userData = snap.val();
             styles.card,
             {
               opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
+              transform: [
+                { translateY: slideAnim }
+              ],
             },
           ]}
         >
+
           <Text
             style={[
               styles.cardTitle,
               {
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: isRTL
+                  ? 'right'
+                  : 'left',
               },
             ]}
           >
@@ -461,7 +528,9 @@ userData = snap.val();
             style={[
               styles.cardSubtitle,
               {
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: isRTL
+                  ? 'right'
+                  : 'left',
               },
             ]}
           >
@@ -472,7 +541,9 @@ userData = snap.val();
             style={[
               styles.inputLabel,
               {
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: isRTL
+                  ? 'right'
+                  : 'left',
               },
             ]}
           >
@@ -483,14 +554,16 @@ userData = snap.val();
             style={[
               styles.inputContainer,
               usernameFocused &&
-                styles.inputContainerFocused,
+              styles.inputContainerFocused,
             ]}
           >
             <TextInput
               style={[
                 styles.input,
                 {
-                  textAlign: isRTL ? 'right' : 'left',
+                  textAlign: isRTL
+                    ? 'right'
+                    : 'left',
                 },
               ]}
               placeholder={t.usernamePlaceholder}
@@ -498,8 +571,12 @@ userData = snap.val();
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
-              onFocus={() => setUsernameFocused(true)}
-              onBlur={() => setUsernameFocused(false)}
+              onFocus={() =>
+                setUsernameFocused(true)
+              }
+              onBlur={() =>
+                setUsernameFocused(false)
+              }
             />
           </View>
 
@@ -507,7 +584,9 @@ userData = snap.val();
             style={[
               styles.inputLabel,
               {
-                textAlign: isRTL ? 'right' : 'left',
+                textAlign: isRTL
+                  ? 'right'
+                  : 'left',
                 marginTop: 14,
               },
             ]}
@@ -519,14 +598,16 @@ userData = snap.val();
             style={[
               styles.inputContainer,
               passwordFocused &&
-                styles.inputContainerFocused,
+              styles.inputContainerFocused,
             ]}
           >
             <TextInput
               style={[
                 styles.input,
                 {
-                  textAlign: isRTL ? 'right' : 'left',
+                  textAlign: isRTL
+                    ? 'right'
+                    : 'left',
                 },
               ]}
               placeholder={t.passwordPlaceholder}
@@ -534,18 +615,26 @@ userData = snap.val();
               value={password}
               onChangeText={setPassword}
               secureTextEntry={isPasswordSecure}
-              onFocus={() => setPasswordFocused(true)}
-              onBlur={() => setPasswordFocused(false)}
+              onFocus={() =>
+                setPasswordFocused(true)
+              }
+              onBlur={() =>
+                setPasswordFocused(false)
+              }
             />
 
             <TouchableOpacity
               onPress={() =>
-                setIsPasswordSecure(!isPasswordSecure)
+                setIsPasswordSecure(
+                  !isPasswordSecure
+                )
               }
               style={styles.eyeButton}
             >
               <Text style={styles.eyeIcon}>
-                {isPasswordSecure ? '👁️' : '🙈'}
+                {isPasswordSecure
+                  ? '👁️'
+                  : '🙈'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -568,7 +657,7 @@ userData = snap.val();
               style={[
                 styles.toggle,
                 rememberMe &&
-                  styles.toggleActive,
+                styles.toggleActive,
               ]}
               onPress={() =>
                 setRememberMe(!rememberMe)
@@ -582,6 +671,7 @@ userData = snap.val();
                     left: rememberMe
                       ? undefined
                       : 3,
+
                     right: rememberMe
                       ? 3
                       : undefined,
@@ -595,7 +685,7 @@ userData = snap.val();
             style={[
               styles.loginButton,
               loading &&
-                styles.loginButtonDisabled,
+              styles.loginButtonDisabled,
             ]}
             onPress={handleLogin}
             disabled={loading}
@@ -863,11 +953,6 @@ const styles = StyleSheet.create({
 
   contactButtonText: {
     color: '#64748B',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});const styles = StyleSheet.create({
-  someStyle: {
     fontSize: 13,
     fontWeight: '700',
   },
