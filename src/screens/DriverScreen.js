@@ -1,4 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+
+import {
+  requestLocationPermission,
+  getCurrentLocation,
+} from '../services/locationService';
+
+import { updateBusLocation } from '../services/busService';
+
 import {
   StyleSheet,
   Text,
@@ -16,6 +24,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, useNavigation } from '@react-navigation/native';
+
 import {
   ref,
   onValue,
@@ -101,18 +110,13 @@ export default function DriverScreen() {
 
       try {
 
-        const { status } =
-          await Location.requestForegroundPermissionsAsync();
+        await requestLocationPermission();
 
-        if (status === 'granted') {
+        await Location.requestBackgroundPermissionsAsync();
 
-          await Location.requestBackgroundPermissionsAsync();
+        const loc = await getCurrentLocation();
 
-          const loc =
-            await Location.getCurrentPositionAsync({});
-
-          setCurrentLoc(loc.coords);
-        }
+        setCurrentLoc(loc);
 
         const hasStarted =
           await Location.hasStartedLocationUpdatesAsync(
@@ -121,10 +125,11 @@ export default function DriverScreen() {
 
         setIsTripActive(hasStarted);
 
-      } catch (err) {
+      } catch (error) {
 
-        console.log(err);
+        console.log(error);
       }
+
     })();
 
     const schoolRef = ref(
@@ -428,9 +433,7 @@ export default function DriverScreen() {
       </View>
 
       <View style={styles.speedCard}>
-
         <View style={styles.speedInfo}>
-
           <Text style={styles.speedValue}>
             {currentSpeed}
           </Text>
@@ -438,11 +441,9 @@ export default function DriverScreen() {
           <Text style={styles.speedUnit}>
             كم/س
           </Text>
-
         </View>
 
         <View style={styles.speedLimit}>
-
           <Text style={styles.limitText}>
             السرعة المحددة:
             {' '}
@@ -451,166 +452,12 @@ export default function DriverScreen() {
 
           {currentSpeed >
             (user?.maxSpeed || 80) && (
-
             <Text style={styles.speedWarning}>
               ⚠️ تجاوز السرعة!
             </Text>
           )}
-
         </View>
-
       </View>
-
-      <View style={styles.actionRow}>
-
-        <TouchableOpacity
-          style={styles.emergencyBtn}
-          onPress={sendEmergency}
-        >
-          <Text style={styles.emergencyBtnText}>
-            ⚠️ طوارئ
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.statusCard}>
-
-          <View
-            style={[
-              styles.statusIndicator,
-              {
-                backgroundColor:
-                  isTripActive
-                    ? '#10B981'
-                    : '#EF4444',
-              },
-            ]}
-          />
-
-          <Text style={styles.statusText}>
-            {isTripActive
-              ? 'الرحلة جارية'
-              : 'متوقفة'}
-          </Text>
-
-          <TouchableOpacity
-            style={[
-              styles.tripBtn,
-              {
-                backgroundColor:
-                  isTripActive
-                    ? '#EF4444'
-                    : '#10B981',
-              },
-            ]}
-            onPress={
-              isTripActive
-                ? stopTracking
-                : startTrip
-            }
-          >
-            <Text style={styles.tripBtnText}>
-              {isTripActive
-                ? 'إنهاء'
-                : 'بدء'}
-            </Text>
-          </TouchableOpacity>
-
-        </View>
-
-      </View>
-
-      <MapView
-        style={styles.map}
-        showsUserLocation={true}
-        initialRegion={{
-          latitude:
-            currentLoc?.latitude || 31.9454,
-          longitude:
-            currentLoc?.longitude || 35.9284,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }}
-      >
-
-        {students.map((s) => (
-
-          s.latitude && (
-
-            <Marker
-              key={s.id}
-              coordinate={{
-                latitude: s.latitude,
-                longitude: s.longitude,
-              }}
-              title={s.name}
-              pinColor={
-                s.status === 'present'
-                  ? 'green'
-                  : 'orange'
-              }
-            />
-          )
-        ))}
-
-      </MapView>
-
-      <View style={styles.studentListContainer}>
-
-        <Text style={styles.listTitle}>
-          طلاب الرحلة ({students.length})
-        </Text>
-
-        <FlatList
-          data={students}
-          keyExtractor={(item) => item.id}
-
-          renderItem={({ item }) => (
-
-            <View style={styles.studentItem}>
-
-              <TouchableOpacity
-                style={styles.callBtn}
-                onPress={() =>
-                  callParent(
-                    item.parentUsername
-                  )
-                }
-              >
-                <Text style={styles.callBtnText}>
-                  📞 اتصل
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.studentInfo}>
-
-                <Text style={styles.studentName}>
-                  {item.name}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.studentSub,
-
-                    item.status ===
-                      'present' && {
-                      color: '#10B981',
-                      fontWeight: 'bold',
-                    },
-                  ]}
-                >
-                  {item.status === 'present'
-                    ? 'صعد الباص ✅'
-                    : `${item.class}-${item.section}`}
-                </Text>
-
-              </View>
-
-            </View>
-          )}
-        />
-
-      </View>
-
     </SafeAreaView>
   );
 }
@@ -663,25 +510,12 @@ TaskManager.defineTask(
               Math.round((speed || 0) * 3.6)
             );
 
-            const { ref, update } =
-              require('firebase/database');
-
-            const { db } =
-              require('../firebaseConfig');
-
-            await update(
-              ref(
-                db,
-                `schools/${schoolId}/bus/${user.username}`
-              ),
-              {
-                latitude,
-                longitude,
-                speed: speedKmH,
-                updatedAt:
-                  new Date().toISOString(),
-                isActive: true,
-              }
+            await updateBusLocation(
+              schoolId,
+              user.username,
+              latitude,
+              longitude,
+              speedKmH
             );
           }
 
@@ -698,7 +532,6 @@ TaskManager.defineTask(
 );
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -708,190 +541,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-
-  header: {
-    padding: 15,
-    backgroundColor: '#FFF',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
-  },
-
-  driverName: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-
-  logoutBtn: {
-    padding: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
-  },
-
-  logoutText: {
-    color: '#EF4444',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-
-  speedCard: {
-    margin: 15,
-    padding: 15,
-    backgroundColor: '#1E293B',
-    borderRadius: 15,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  speedInfo: {
-    alignItems: 'center',
-  },
-
-  speedValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-
-  speedUnit: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-
-  speedLimit: {
-    alignItems: 'flex-end',
-  },
-
-  limitText: {
-    fontSize: 14,
-    color: '#94A3B8',
-  },
-
-  speedWarning: {
-    fontSize: 14,
-    color: '#EF4444',
-    fontWeight: 'bold',
-    marginTop: 5,
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 15,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-
-  emergencyBtn: {
-    backgroundColor: '#EF4444',
-    padding: 12,
-    borderRadius: 12,
-    marginRight: 10,
-    elevation: 3,
-  },
-
-  emergencyBtnText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-
-  statusCard: {
-    flex: 1,
-    padding: 10,
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 2,
-  },
-
-  statusIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-
-  statusText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-
-  tripBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-
-  tripBtnText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 11,
-  },
-
-  map: {
-    width: width,
-    height: height * 0.25,
-    marginTop: 10,
-  },
-
-  studentListContainer: {
-    flex: 1,
-    padding: 15,
-  },
-
-  listTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    textAlign: 'right',
-    marginBottom: 10,
-  },
-
-  studentItem: {
-    backgroundColor: '#FFF',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 1,
-  },
-
-  studentInfo: {
-    alignItems: 'flex-end',
-  },
-
-  studentName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  studentSub: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-
-  callBtn: {
-    backgroundColor: '#3B82F6',
-    padding: 6,
-    borderRadius: 6,
-  },
-
-  callBtnText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: 'bold',
   },
 });
