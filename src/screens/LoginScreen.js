@@ -224,28 +224,48 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('remember_me_status', 'false');
       }
 
-      // حساب الأدمن الافتراضي
-      if (
-        (enteredUser === 'admin' ||
-          enteredUser === 'alalzyadi1986@gmail.com') &&
-        enteredPass === 'admin123'
-      ) {
-        const sessionData = {
-          username: enteredUser,
-          role: 'superadmin',
-        };
+// تسجيل دخول المدير العام الحقيقي
+if (enteredUser === 'admin') {
 
-        await AsyncStorage.setItem(
-          'user_session',
-          JSON.stringify(sessionData)
-        );
+  const adminSnapshot = await getWithTimeout(
+    ref(db, 'admin_settings/super_admin'),
+    8000
+  );
 
-        setLoading(false);
+  const adminData = adminSnapshot.val();
 
-        navigateToDashboard('superadmin', sessionData, null);
+  if (
+    adminData &&
+    enteredPass === adminData.password
+  ) {
 
-        return;
-      }
+    const sessionData = {
+      username: 'admin',
+      role: 'superadmin',
+    };
+
+    await AsyncStorage.setItem(
+      'user_session',
+      JSON.stringify(sessionData)
+    );
+
+    setLoading(false);
+
+    navigateToDashboard(
+      'superadmin',
+      sessionData,
+      null
+    );
+
+    return;
+
+  } else {
+
+    Alert.alert('❌', t.errorWrong);
+    setLoading(false);
+    return;
+  }
+}
 
       // إنشاء مفتاح آمن للبريد الإلكتروني
       const safeUser = enteredUser.replace(/\./g, ',');
