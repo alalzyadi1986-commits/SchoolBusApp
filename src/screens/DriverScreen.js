@@ -79,8 +79,14 @@ export default function DriverScreen() {
       try {
         await requestLocationPermission();
         await Location.requestBackgroundPermissionsAsync();
-        const loc = await getCurrentLocation();
-        setCurrentLoc(loc);
+        const loc = await Location.getCurrentPositionAsync({
+         accuracy: Location.Accuracy.High,
+           });
+
+          setCurrentLoc({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
         const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
         setIsTripActive(hasStarted);
       } catch (error) {
@@ -256,6 +262,36 @@ export default function DriverScreen() {
         </View>
       </View>
 
+{currentLoc && (
+  <MapView
+    style={styles.map}
+    initialRegion={{
+      latitude: currentLoc.latitude,
+      longitude: currentLoc.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }}
+    showsUserLocation={true}
+    followsUserLocation={true}
+  >
+    <Marker
+      coordinate={{
+        latitude: currentLoc.latitude,
+        longitude: currentLoc.longitude,
+      }}
+      title="موقع الباص"
+      description="السائق هنا"
+    />
+
+    {schoolLoc && (
+      <Marker
+        coordinate={schoolLoc}
+        title="المدرسة"
+        pinColor="blue"
+      />
+    )}
+  </MapView>
+)}
       <View style={styles.actions}>
         {!isTripActive ? (
           <TouchableOpacity style={styles.startBtn} onPress={startTrip}>
@@ -349,6 +385,13 @@ const styles = StyleSheet.create({
   parentName: { fontSize: 14, color: '#6B7280', marginTop: 2 },
   callBtn: { backgroundColor: '#E0F2FE', padding: 10, borderRadius: 50 },
   callIcon: { fontSize: 20 },
+  map: {
+  width: width - 40,
+  height: 250,
+  marginHorizontal: 20,
+  marginTop: 20,
+  borderRadius: 16,
+},
   emptyText: { textAlign: 'center', marginTop: 40, color: '#9CA3AF' },
 });
 
