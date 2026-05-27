@@ -33,7 +33,6 @@ import { updateBusLocation } from '../services/busService';
 
 const { width, height } = Dimensions.get('window');
 const LOCATION_TASK_NAME = 'background-location-task';
-const mapRef = useRef(null);
 
 export default function DriverScreen() {
   const route = useRoute();
@@ -46,6 +45,8 @@ export default function DriverScreen() {
   const [loading, setLoading] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [schoolLoc, setSchoolLoc] = useState(null);
+  const mapRef = useRef(null);
+  const watchSubscription = useRef(null);
 
   useEffect(() => {
     if (!schoolId || !user?.username) {
@@ -66,7 +67,7 @@ export default function DriverScreen() {
           .map((key) => ({ id: key, ...data[key] }))
           .filter(
             (s) =>
-              s.driverUsername === user.username &&
+              (s.driverUsername === user.username || s.driver_id === user.username) &&
               s.status !== 'absent_today'
           );
         setStudents(list);
@@ -76,378 +77,208 @@ export default function DriverScreen() {
       setLoading(false);
     });
 
-    (async () => {
+    const setupLocation = async () => {
       try {
         await requestLocationPermission();
-        Location.watchPositionAsync(
-  {
-    accuracy: Location.Accuracy.High,
-    timeInterval: 5000,
-    distanceInterval: 5,
-  },
-  (location) => {
-    setCurrentLoc({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    });
-       mapRef.current?.animateToRegion({
-  latitude: location.coords.latitude,
-  longitude: location.coords.longitude,
-  latitudeDelta: 0.01,
-  longitudeDelta: 0.01,
-}, 1000);
-    setCurrentSpeed(
-      Math.round((location.coords.speed || 0) * 3.6)
-    );
-  }
-);
-        await Location.requestBackgroundPermissionsAsync();
-        const loc = await Location.getCurrentPositionAsync({
-         accuracy: Location.Accuracy.High,
-           });
-
+        const initialLoc = await getCurrentLocation();
+        if (initialLoc) {
           setCurrentLoc({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-        });
-        const speed = Math.round(
-  (location.coords.speed || 0) * 3.6
-);
+            latitude: initialLoc.latitude,
+            longitude: initialLoc.longitude,
+          });
+        }
 
-setCurrentSpeed(speed < 5 ? 0 : speed);
-        const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
-        setIsTripActive(hasStarted);
-      } catch (error) {
-        console.log(error);
-      }
-    })();
+        watchSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000,
+            distanceInterval: 5,
+          },
+          (location) => {
+            const newLoc = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            };
+            setCurrentLoc(newLoc);
+            setCurrentSpeed(Math.round((location.coords.speed || 0) * 3.6));
 
-    const schoolRef = ref(db, `schools/${schoolId}`);
-    const unsubscribeSchool = onValue(schoolRef, (snap) => {
-      const data = snap.val();
-      if (data?.latitude && data?.longitude) {
-        setSchoolLoc({
-          latitude: data.latitude,
-          longitude: data.longitude,
-        });
+            if (isTripActive) {
+              updateBusLocation(
+                schoolId,
+                user.username,
+                newLoc.latitude,
+                newLoc.longitude,
+                location.coords.speed || 0
+              );
+            }
+
+            mapRef.current?.animateToRegion({
+              ...newLoc,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }, 1000);
+          }
+        );
+      } catch (e) {
+        console.error('Location setup error:', e);
       }
-    });
+    };
+
+    setupLocation();
 
     return () => {
       unsubscribeStudents();
-      unsubscribeSchool();
+      if (watchSubscription.current) {
+        watchSubscription.current.remove();
+      }
     };
-  }, [schoolId, user]);
+  }, [schoolId, user, isTripActive]);
 
   const startTrip = async () => {
     try {
-      if (user?.permissions?.canTrackLocation === false) {
-        Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية بدء الرحلة');
-        return;
-      }
-
-      const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
-      if (foregroundStatus !== 'granted') {
-        Alert.alert('خطأ', 'يجب السماح بالوصول للموقع');
-        return;
-      }
-
-      const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus !== 'granted') {
-        Alert.alert('تنبيه', 'يرجى اختيار السماح دائماً للموقع');
-      }
-
-      await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-        accuracy: Location.Accuracy.High,
-        distanceInterval: 10,
-        timeInterval: 10000,
-        foregroundService: {
-          notificationTitle: 'تطبيق الباص يعمل',
-          notificationBody: 'يتم تتبع الباص حالياً',
-          notificationColor: '#3B82F6',
-        },
-      });
-
-      setIsTripActive(true);
-      Alert.alert('تم البدء', 'بدأت الرحلة بنجاح');
-    } catch (err) {
-      console.log(err);
-      Alert.alert('خطأ', 'فشل في بدء الرحلة');
-    }
-  };
-
-  const stopTracking = async () => {
-    try {
-      const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
-      if (hasStarted) {
-        await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
-      }
-
-      if (schoolId && user?.username) {
-        let closeLocation = 'Unknown';
-        try {
-          const loc = await Location.getCurrentPositionAsync({});
-          closeLocation = `${loc.coords.latitude},${loc.coords.longitude}`;
-        } catch (e) {}
-
-        await update(ref(db, `schools/${schoolId}/bus/${user.username}`), {
-          isActive: false,
-          updatedAt: new Date().toISOString(),
-          terminationType: 'manual',
-          terminationCoords: closeLocation,
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
+      if (!isRegistered) {
+        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 10000,
+          distanceInterval: 10,
+          foregroundService: {
+            notificationTitle: "تتبع الباص نشط",
+            notificationBody: "يتم مشاركة موقعك مع أولياء الأمور",
+            notificationColor: "#3B82F6",
+          },
         });
       }
-
-      setIsTripActive(false);
-      setCurrentSpeed(0);
-      Alert.alert('تم الإنهاء', 'تم إيقاف الرحلة');
-    } catch (err) {
-      console.log(err);
+      setIsTripActive(true);
+      Alert.alert("تم بدء الرحلة", "موقعك الآن متاح للمدرسة وأولياء الأمور.");
+    } catch (e) {
+      Alert.alert("خطأ", "فشل بدء تتبع الموقع في الخلفية.");
     }
   };
 
-  const sendEmergency = () => {
-    Alert.alert('⚠️ تأكيد', 'هل تريد إرسال بلاغ طوارئ؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'إرسال',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const emergencyRef = push(ref(db, `schools/${schoolId}/emergencies`));
-            await set(emergencyRef, {
-              senderName: user.name,
-              senderId: user.username,
-              role: 'driver',
-              message: 'السائق يطلب المساعدة',
-              latitude: currentLoc?.latitude || 0,
-              longitude: currentLoc?.longitude || 0,
-              timestamp: new Date().toISOString(),
-              status: 'active',
-            });
-            Alert.alert('تم الإرسال', 'تم إرسال البلاغ');
-          } catch (err) {
-            console.log(err);
-          }
-        },
-      },
-    ]);
-  };
-
-  const callParent = async (parentUsername) => {
+  const stopTrip = async () => {
     try {
-      const parentRef = ref(db, `schools/${schoolId}/parents/${parentUsername}`);
-      const snap = await get(parentRef);
-      const p = snap.val();
-      if (p?.phone) {
-        Linking.openURL(`tel:${p.phone}`);
-      } else {
-        Alert.alert('خطأ', 'رقم ولي الأمر غير متوفر');
-      }
-    } catch (err) {
-      console.log(err);
+      await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+      await update(ref(db, `schools/${schoolId}/bus/${user.username}`), { isActive: false });
+      setIsTripActive(false);
+      Alert.alert("تم إنهاء الرحلة", "توقف تتبع الموقع الآن.");
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-      </View>
-    );
-  }
+  const callParent = (phone) => {
+    if (phone) Linking.openURL(`tel:${phone}`);
+    else Alert.alert("خطأ", "رقم الهاتف غير متوفر");
+  };
+
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => {
-            stopTracking();
-            navigation.replace('Login');
-          }}
-        >
-          <Text style={styles.logoutText}>خروج</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>لوحة السائق 🚌</Text>
-          <Text style={styles.driverName}>
-            {user?.name} | باص {user?.busNumber}
-          </Text>
+          <Text style={styles.driverName}>{user?.name}</Text>
         </View>
       </View>
 
-      <View style={styles.speedCard}>
-        <View style={styles.speedInfo}>
+      <View style={styles.statusCard}>
+        <View style={styles.speedCircle}>
           <Text style={styles.speedValue}>{currentSpeed}</Text>
           <Text style={styles.speedUnit}>كم/س</Text>
         </View>
-        <View style={styles.speedLimit}>
-          <Text style={styles.limitText}>السرعة المحددة: {user?.maxSpeed || 80}</Text>
-          {currentSpeed > (user?.maxSpeed || 80) && (
-            <Text style={styles.speedWarning}>⚠️ تجاوز السرعة!</Text>
-          )}
-        </View>
-      </View>
-
-{currentLoc && (
-  <MapView
-    ref={mapRef}
-    style={styles.map}
-    initialRegion={{
-      latitude: currentLoc.latitude,
-      longitude: currentLoc.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    }}
-    showsUserLocation={true}
-    followsUserLocation={true}
-  >
-    <Marker
-      coordinate={{
-        latitude: currentLoc.latitude,
-        longitude: currentLoc.longitude,
-      }}
-      title="موقع الباص"
-      description="السائق هنا"
-    />
-
-    {schoolLoc && (
-      <Marker
-        coordinate={schoolLoc}
-        title="المدرسة"
-        pinColor="blue"
-      />
-    )}
-  </MapView>
-)}
-      <View style={styles.actions}>
-        {!isTripActive ? (
-          <TouchableOpacity style={styles.startBtn} onPress={startTrip}>
-            <Text style={styles.btnText}>بدء الرحلة</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.stopBtn} onPress={stopTracking}>
-            <Text style={styles.btnText}>إنهاء الرحلة</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.emergencyBtn} onPress={sendEmergency}>
-          <Text style={styles.btnText}>🚨 طوارئ</Text>
+        <TouchableOpacity 
+          style={[styles.tripBtn, isTripActive ? styles.stopBtn : styles.startBtn]} 
+          onPress={isTripActive ? stopTrip : startTrip}
+        >
+          <Text style={styles.tripBtnText}>{isTripActive ? 'إنهاء الرحلة 🏁' : 'بدء الرحلة 🚀'}</Text>
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={students}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.studentItem}>
-            <View style={styles.studentInfo}>
-              <Text style={styles.studentName}>{item.name}</Text>
-              <Text style={styles.parentName}>ولي الأمر: {item.parentName}</Text>
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        initialRegion={{
+          latitude: currentLoc?.latitude || 31.9454,
+          longitude: currentLoc?.longitude || 35.9284,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+        showsUserLocation={true}
+      >
+        {currentLoc && <Marker coordinate={currentLoc} title="موقعي الحالي" pinColor="blue" />}
+      </MapView>
+
+      <View style={styles.studentListContainer}>
+        <Text style={styles.listTitle}>قائمة الطلاب ({students.length})</Text>
+        <FlatList
+          data={students}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.studentItem}>
+              <TouchableOpacity style={styles.callBtn} onPress={() => callParent(item.parentPhone || item.parent_phone)}>
+                <Text style={styles.callBtnText}>📞 اتصل</Text>
+              </TouchableOpacity>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.studentName}>{item.name}</Text>
+                <Text style={styles.studentSub}>{item.class} - {item.status === 'present' ? '✅ داخل الباص' : '⏳ ينتظر'}</Text>
+              </View>
             </View>
-            <TouchableOpacity
-              style={styles.callBtn}
-              onPress={() => callParent(item.parentUsername)}
-            >
-              <Text style={styles.callIcon}>📞</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>لا يوجد طلاب مسجلين لهذا السائق</Text>
-        }
-      />
+          )}
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
-  driverName: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
-  logoutText: { color: '#EF4444', fontWeight: 'bold' },
-  speedCard: {
-    margin: 20,
-    padding: 20,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  speedInfo: { flexDirection: 'row', alignItems: 'baseline' },
-  speedValue: { fontSize: 48, fontWeight: 'bold', color: '#3B82F6' },
-  speedUnit: { fontSize: 18, color: '#6B7280', marginLeft: 8 },
-  speedLimit: { marginTop: 10, alignItems: 'center' },
-  limitText: { fontSize: 16, color: '#4B5563' },
-  speedWarning: { color: '#EF4444', fontWeight: 'bold', marginTop: 4 },
-  actions: { flexDirection: 'row', paddingHorizontal: 20, gap: 12 },
-  startBtn: { flex: 2, backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center' },
-  stopBtn: { flex: 2, backgroundColor: '#F59E0B', padding: 16, borderRadius: 12, alignItems: 'center' },
-  emergencyBtn: { flex: 1, backgroundColor: '#EF4444', padding: 16, borderRadius: 12, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  studentItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginTop: 12,
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-  },
-  studentInfo: { flex: 1 },
-  studentName: { fontSize: 16, fontWeight: 'bold', color: '#1F2937' },
-  parentName: { fontSize: 14, color: '#6B7280', marginTop: 2 },
-  callBtn: { backgroundColor: '#E0F2FE', padding: 10, borderRadius: 50 },
-  callIcon: { fontSize: 20 },
-  map: {
-  width: width - 40,
-  height: 250,
-  marginHorizontal: 20,
-  marginTop: 20,
-  borderRadius: 16,
-},
-  emptyText: { textAlign: 'center', marginTop: 40, color: '#9CA3AF' },
-});
-
+// تعريف مهمة الخلفية خارج المكون
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-  if (error) {
-    console.error('Background Task Error:', error);
-    return;
-  }
+  if (error) return;
   if (data) {
     const { locations } = data;
     const location = locations[0];
-    if (location) {
-      try {
-        const sessionStr = await AsyncStorage.getItem('background_session');
-        if (sessionStr) {
-          const { schoolId, user } = JSON.parse(sessionStr);
-          await updateBusLocation(
-            schoolId,
-            user.username,
-            location.coords.latitude,
-            location.coords.longitude,
-            Math.round((location.coords.speed || 0) * 3.6)
-          );
-        }
-      } catch (e) {
-        console.error('Task Update Error:', e);
+    try {
+      const session = await AsyncStorage.getItem('background_session');
+      if (session) {
+        const { schoolId, user } = JSON.parse(session);
+        await updateBusLocation(
+          schoolId,
+          user.username,
+          location.coords.latitude,
+          location.coords.longitude,
+          location.coords.speed || 0
+        );
       }
+    } catch (e) {
+      console.error('Background task error:', e);
     }
   }
+});
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  driverName: { fontSize: 14, color: '#64748B' },
+  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold' },
+  statusCard: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  speedCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' },
+  speedValue: { fontSize: 24, fontWeight: 'bold', color: '#1E293B' },
+  speedUnit: { fontSize: 10, color: '#64748B' },
+  tripBtn: { paddingVertical: 15, paddingHorizontal: 30, borderRadius: 12, elevation: 3 },
+  startBtn: { backgroundColor: '#10B981' },
+  stopBtn: { backgroundColor: '#EF4444' },
+  tripBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  map: { height: 250, width: '100%' },
+  studentListContainer: { flex: 1, padding: 15 },
+  listTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, textAlign: 'right' },
+  studentItem: { backgroundColor: '#FFF', padding: 12, borderRadius: 10, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 1 },
+  studentName: { fontSize: 14, fontWeight: 'bold' },
+  studentSub: { fontSize: 12, color: '#64748B' },
+  callBtn: { backgroundColor: '#3B82F6', padding: 8, borderRadius: 8 },
+  callBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' }
 });

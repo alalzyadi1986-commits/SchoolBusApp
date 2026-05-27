@@ -1,67 +1,55 @@
-import { ref, get } from 'firebase/database';
-import { db } from '../firebaseConfig';
+import { ref, get } from "firebase/database";
+import { db } from "../firebaseConfig";
 
 /**
- * تسجيل الدخول باستخدام اسم المستخدم وكلمة المرور فقط
- * يقوم بالبحث في userIndex لمعرفة المدرسة والدور، ثم يتحقق من البيانات
+ * تسجيل الدخول الذكي عبر البحث في userIndex
+ * @param {string} username اسم المستخدم
+ * @param {string} password كلمة المرور
  */
 export const loginUser = async (username, password) => {
   try {
-    // 1. البحث في الفهرس العام للمستخدمين لمعرفة المدرسة والدور
-    const safeKey = username.replace(/\./g, ',');
-    const indexRef = ref(db, `userIndex/${safeKey}`);
-    const indexSnap = await get(indexRef);
-
-    if (!indexSnap.exists()) {
-      // تحقق مما إذا كان المستخدم هو Super Admin
-      const superAdminRef = ref(db, 'admin_settings/super_admin');
-      const superSnap = await get(superAdminRef);
-      const superData = superSnap.val();
-
-      if (username === 'admin' && password === superData?.password) {
-        return {
-          username: 'admin',
-          name: 'مدير النظام',
-          role: 'superadmin'
-        };
-      }
-      throw new Error('User not found');
+    const safeKey = username.trim().replace(/\./g, ',');
+    
+    // 1. التحقق من Super Admin أولاً
+    const superAdminSnap = await get(ref(db, 'admin_settings/super_admin'));
+    const superAdminData = superAdminSnap.val();
+    
+    if (username === 'superadmin' && password === superAdminData?.password) {
+      return { username: 'superadmin', role: 'superadmin', name: 'المدير العام' };
     }
 
-    const { schoolId, role } = indexSnap.val();
+    // 2. البحث عن المستخدم في userIndex لمعرفة المدرسة والدور
+    const indexSnap = await get(ref(db, `userIndex/${safeKey}`));
+    const indexData = indexSnap.val();
 
-    // 2. جلب بيانات المستخدم من فرع المدرسة الصحيح
+    if (!indexData) {
+      console.log("User not found in index");
+      return null;
+    }
+
+    const { schoolId, role } = indexData;
+
+    // 3. جلب بيانات المستخدم الكاملة من مسار المدرسة الصحيح
+    // ملاحظة: قمت بتصحيح المسارات لضمان التوافق (مثلاً staff بدلاً من staffs)
     let userPath = `schools/${schoolId}/${role}s/${safeKey}`;
     
-    // تصحيح المسارات لبعض الأدوار
-    if (role === 'school') {
-      userPath = `users/${safeKey}`;
-    }
+    if (role === 'school') userPath = `users/${safeKey}`;
+    else if (role === 'staff') userPath = `schools/${schoolId}/staff/${safeKey}`;
+    else if (role === 'driver') userPath = `schools/${schoolId}/drivers/${safeKey}`;
+    else if (role === 'parent') userPath = `schools/${schoolId}/parents/${safeKey}`;
+    else if (role === 'student') userPath = `schools/${schoolId}/students/${safeKey}`;
+    else if (role === 'manager') userPath = `schools/${schoolId}/managers/${safeKey}`;
 
-    const userRef = ref(db, userPath);
-    const userSnap = await get(userRef);
-
-    if (!userSnap.exists()) {
-      throw new Error('User data not found');
-    }
-
+    const userSnap = await get(ref(db, userPath));
     const userData = userSnap.val();
 
-    // 3. التحقق من كلمة المرور
-    if (userData.password !== password) {
-      throw new Error('Invalid credentials');
+    if (userData && userData.password === password) {
+      return { ...userData, schoolId, role, username: safeKey };
     }
 
-    // إرجاع البيانات مع الـ schoolId لضمان وصوله للشاشات التالية
-    return {
-      ...userData,
-      schoolId,
-      role,
-      username // التأكد من وجود اسم المستخدم
-    };
-
+    return null;
   } catch (error) {
-    console.error('Auth Service Error:', error);
+    console.error("Login service error:", error);
     throw error;
   }
 };

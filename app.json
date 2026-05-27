@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -57,7 +58,13 @@
         {
           "locationAlwaysAndWhenInUsePermission": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً"
         }
-      ]
-    ]
+      ],
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
+    }
   }
 }
