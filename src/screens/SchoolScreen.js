@@ -51,7 +51,6 @@ export default function SchoolScreen({ route, navigation }) {
       return;
     }
 
-    // جلب بيانات المدرسة الأساسية فقط
     const schoolUnsub = onValue(ref(db, `schools/${schoolId}`), (snap) => {
       const data = snap.val();
       if (data) {
@@ -61,7 +60,6 @@ export default function SchoolScreen({ route, navigation }) {
       }
     });
 
-    // جلب بيانات كل قسم من مدرسة هذا المستخدم فقط
     const fetchData = (path, setter) => {
       return onValue(ref(db, `schools/${schoolId}/${path}`), (snap) => {
         const data = snap.val();
@@ -105,7 +103,8 @@ export default function SchoolScreen({ route, navigation }) {
         { text: 'حذف', style: 'destructive', onPress: () => remove(ref(db, `${path}/${item.id}`)) },
       ]);
     } else if (action === 'save') {
-      if (!formData.username || !formData.name) {
+      const safeUsername = formData.username?.replace(/\./g, ',');
+      if (!safeUsername || !formData.name) {
         Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية (الاسم واسم المستخدم)');
         return;
       }
@@ -114,23 +113,17 @@ export default function SchoolScreen({ route, navigation }) {
           await update(ref(db, `${path}/${editingId}`), formData);
           setEditingId(null);
         } else {
-          await set(ref(db, `${path}/${formData.username}`), formData);
-
-          // إضافة في userIndex لتسريع تسجيل الدخول
-const role =
-  activeTab === 'drivers'
-    ? 'driver'
-    : activeTab === 'staff'
-    ? 'staff'
-    : activeTab === 'parents'
-    ? 'parent'
-    : activeTab === 'students'
-    ? 'student'
-    : activeTab === 'managers'
-    ? 'manager'
-    : activeTab;
-
-          await set(ref(db, `userIndex/${formData.username}`), { schoolId, role });
+          await set(ref(db, `${path}/${safeUsername}`), formData);
+          
+          const roleMap = {
+            'drivers': 'driver',
+            'staff': 'staff',
+            'parents': 'parent',
+            'students': 'student',
+            'managers': 'manager'
+          };
+          const role = roleMap[activeTab] || activeTab;
+          await set(ref(db, `userIndex/${safeUsername}`), { schoolId, role });
         }
         setFormData({});
         hideAllForms();
@@ -174,20 +167,6 @@ const role =
     </View>
   );
 
-  const renderPermission = (label, field) => (
-    <TouchableOpacity
-      style={styles.checkboxContainer}
-      key={field}
-      onPress={() => setFormData({
-        ...formData,
-        permissions: { ...formData.permissions, [field]: !formData.permissions?.[field] },
-      })}
-    >
-      <View style={[styles.checkbox, formData.permissions?.[field] && styles.checkboxChecked]} />
-      <Text style={styles.checkboxLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-
   const filteredDrivers = useMemo(() =>
     drivers.filter(d => d.name?.includes(searchQuery) || d.username?.includes(searchQuery)),
     [drivers, searchQuery]);
@@ -201,306 +180,100 @@ const role =
     [parents, searchQuery]);
 
   const filteredStudents = useMemo(() =>
-    students.filter(s =>
+    students.filter(s => 
       (s.name?.includes(searchQuery) || s.username?.includes(searchQuery)) &&
       (selectedClassFilter === 'الكل' || s.class === selectedClassFilter)
-    ),
-    [students, searchQuery, selectedClassFilter]);
+    ), [students, searchQuery, selectedClassFilter]);
 
-  const filteredManagers = useMemo(() =>
-    managers.filter(m => m.name?.includes(searchQuery) || m.username?.includes(searchQuery)),
-    [managers, searchQuery]);
-
-  const filteredReports = useMemo(() =>
-    reports.filter(r => selectedDriverReport === 'الكل' || r.driverUsername === selectedDriverReport),
-    [reports, selectedDriverReport]);
-
-  const renderForm = () => {
-    switch (activeTab) {
-      case 'drivers':
-        return (
-          <View style={styles.formContainer}>
-            {renderInput('اسم السائق', 'name')}
-            {renderInput('اسم المستخدم', 'username')}
-            {renderInput('كلمة المرور', 'password')}
-            {renderInput('رقم الهاتف', 'phone', true)}
-            {renderInput('رقم الباص', 'busNumber')}
-            {renderInput('الحد الأقصى للسرعة', 'maxSpeed', true)}
-            {renderPermission('تتبع الموقع', 'canTrackLocation')}
-            {renderPermission('إرسال تنبيهات', 'canSendAlerts')}
-            <TouchableOpacity onPress={() => handleAction('save')} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>{editingId ? 'تحديث السائق' : 'حفظ السائق'}</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'staff':
-        return (
-          <View style={styles.formContainer}>
-            {renderInput('اسم الموظف', 'name')}
-            {renderInput('اسم المستخدم', 'username')}
-            {renderInput('كلمة المرور', 'password')}
-            {renderInput('رقم الهاتف', 'phone', true)}
-            {renderPermission('إدارة الطلاب', 'canManageStudents')}
-            {renderPermission('إدارة السائقين', 'canManageDrivers')}
-            <TouchableOpacity onPress={() => handleAction('save')} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>{editingId ? 'تحديث الموظف' : 'حفظ الموظف'}</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'parents':
-        return (
-          <View style={styles.formContainer}>
-            {renderInput('اسم ولي الأمر', 'name')}
-            {renderInput('اسم المستخدم', 'username')}
-            {renderInput('كلمة المرور', 'password')}
-            {renderInput('رقم الهاتف', 'phone', true)}
-            <TouchableOpacity onPress={() => handleAction('save')} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>{editingId ? 'تحديث ولي الأمر' : 'حفظ ولي الأمر'}</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'students':
-        return (
-          <View style={styles.formContainer}>
-            {renderInput('اسم الطالب', 'name')}
-            {renderInput('اسم المستخدم', 'username')}
-            {renderInput('كلمة المرور', 'password')}
-            {renderInput('الصف', 'class')}
-            {renderInput('اسم ولي الأمر', 'parentName')}
-            {renderInput('اسم مستخدم ولي الأمر', 'parentUsername')}
-            {renderInput('اسم السائق', 'driverName')}
-            {renderInput('اسم مستخدم السائق', 'driverUsername')}
-            <TouchableOpacity onPress={() => handleAction('save')} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>{editingId ? 'تحديث الطالب' : 'حفظ الطالب'}</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'managers':
-        return (
-          <View style={styles.formContainer}>
-            {renderInput('اسم المدير', 'name')}
-            {renderInput('اسم المستخدم', 'username')}
-            {renderInput('كلمة المرور', 'password')}
-            {renderInput('رقم الهاتف', 'phone', true)}
-            <TouchableOpacity onPress={() => handleAction('save')} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>{editingId ? 'تحديث المدير' : 'حفظ المدير'}</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardName}>{item.name}</Text>
-        {item.username && <Text style={styles.cardSub}>👤 {item.username}</Text>}
-        {item.phone && <Text style={styles.cardSub}>📞 {item.phone}</Text>}
-        {item.busNumber && <Text style={styles.cardSub}>🚌 رقم الباص: {item.busNumber}</Text>}
-        {item.class && <Text style={styles.cardSub}>📚 الصف: {item.class}</Text>}
-        {item.parentName && <Text style={styles.cardSub}>👨‍👦 ولي الأمر: {item.parentName}</Text>}
-        {item.driverUsername && <Text style={styles.cardSub}>🚗 السائق: {item.driverUsername}</Text>}
-        {item.timestamp && <Text style={styles.cardDate}>🕐 {new Date(item.timestamp).toLocaleString()}</Text>}
-      </View>
-      <View style={styles.cardActions}>
-        <TouchableOpacity onPress={() => startEdit(item)} style={styles.editBtn}>
-          <Text style={styles.editBtnText}>تعديل</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleAction('delete', item)} style={styles.deleteBtn}>
-          <Text style={styles.deleteBtnText}>حذف</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007BFF" />
-        <Text style={{ marginTop: 10 }}>جاري تحميل البيانات...</Text>
-      </View>
-    );
-  }
-
-  const tabs = [
-    { key: 'drivers', label: 'السائقون' },
-    { key: 'staff', label: 'الموظفون' },
-    { key: 'parents', label: 'أولياء الأمور' },
-    { key: 'students', label: 'الطلاب' },
-    { key: 'managers', label: 'المدراء' },
-    { key: 'emergencies', label: 'الطوارئ' },
-    { key: 'reports', label: 'التقارير' },
-  ];
-
-  const getListData = () => {
-    switch (activeTab) {
-      case 'drivers': return filteredDrivers;
-      case 'staff': return filteredStaff;
-      case 'parents': return filteredParents;
-      case 'students': return filteredStudents;
-      case 'managers': return filteredManagers;
-      case 'emergencies': return emergencies;
-      case 'reports': return filteredReports;
-      default: return [];
-    }
-  };
-
-  const showForm = showDriverForm || showStaffForm || showParentForm || showStudentForm || showManagerForm;
-  const canAdd = !['emergencies', 'reports'].includes(activeTab);
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
-
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{dynamicSchoolName || schoolName}</Text>
-        <View style={styles.headerButtons}>
-          {isExpired && <Text style={styles.expiryWarning}>⚠️ الاشتراك منتهي</Text>}
-          <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
-            <Text style={styles.logoutBtnText}>🚪 خروج</Text>
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
+          <Text style={styles.logoutText}>خروج</Text>
+        </TouchableOpacity>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
+          <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
         </View>
       </View>
 
-      <View style={styles.tabContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollTabContainer}>
-          {tabs.map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tabButton, activeTab === tab.key && styles.activeTab]}
-              onPress={() => { setActiveTab(tab.key); hideAllForms(); setFormData({}); setEditingId(null); }}
+      <View style={styles.tabsWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
+          {[
+            { id: 'drivers', label: 'السائقين' },
+            { id: 'staff', label: 'المرافقات' },
+            { id: 'parents', label: 'أولياء الأمور' },
+            { id: 'students', label: 'الطلاب' },
+            { id: 'managers', label: 'المدراء' },
+            { id: 'reports', label: 'التقارير' },
+            { id: 'emergencies', label: 'الطوارئ' },
+          ].map(tab => (
+            <TouchableOpacity 
+              key={tab.id} 
+              style={[styles.tab, activeTab === tab.id && styles.tabActive]} 
+              onPress={() => { setActiveTab(tab.id); hideAllForms(); }}
             >
-              <Text style={[styles.tabButtonText, activeTab === tab.key && styles.activeTabButtonText]}>
-                {tab.label}
-              </Text>
+              <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.container}>
-        {canAdd && (
-          <View style={styles.addSection}>
-            <TouchableOpacity style={styles.addBtn} onPress={() => {
-              setFormData({});
-              setEditingId(null);
-              hideAllForms();
-              if (activeTab === 'drivers') setShowDriverForm(v => !v);
-              else if (activeTab === 'staff') setShowStaffForm(v => !v);
-              else if (activeTab === 'parents') setShowParentForm(v => !v);
-              else if (activeTab === 'students') setShowStudentForm(v => !v);
-              else if (activeTab === 'managers') setShowManagerForm(v => !v);
-            }}>
-              <Text style={styles.addBtnText}>
-                + إضافة {
-                  activeTab === 'drivers' ? 'سائق' :
-                  activeTab === 'staff' ? 'موظف' :
-                  activeTab === 'parents' ? 'ولي أمر' :
-                  activeTab === 'students' ? 'طالب' : 'مدير'
-                }
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+      <View style={styles.searchWrapper}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="بحث بالاسم أو اسم المستخدم..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
 
-        {showForm && renderForm()}
-
-        <View style={styles.filterSection}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="🔍 بحث بالاسم أو اسم المستخدم..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {activeTab === 'students' && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-              {['الكل', 'أول', 'ثاني', 'ثالث', 'رابع', 'خامس', 'سادس', 'سابع', 'ثامن', 'تاسع', 'عاشر', 'حادي عشر', 'ثاني عشر'].map(cls => (
-                <TouchableOpacity
-                  key={cls}
-                  style={[styles.filterChip, selectedClassFilter === cls && styles.filterChipActive]}
-                  onPress={() => setSelectedClassFilter(cls)}
-                >
-                  <Text style={[styles.filterChipText, selectedClassFilter === cls && styles.filterChipTextActive]}>{cls}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        <View style={styles.listContainer}>
-          <Text style={styles.listTitle}>
-            {tabs.find(t => t.key === activeTab)?.label} ({getListData().length})
-          </Text>
-          <FlatList
-            data={getListData()}
-            keyExtractor={item => item.id || item.username}
-            renderItem={renderItem}
-            scrollEnabled={false}
-            ListEmptyComponent={<Text style={styles.emptyListText}>لا توجد بيانات لعرضها.</Text>}
-          />
-        </View>
-      </ScrollView>
+      {/* المحتوى سيتم عرضه هنا بناءً على التاب المختار */}
+      <View style={{ flex: 1, padding: 15 }}>
+        <Text style={{ textAlign: 'center', color: '#64748B' }}>
+          يتم حالياً عرض قسم: {activeTab}
+        </Text>
+        <TouchableOpacity 
+          style={styles.addBtn} 
+          onPress={() => {
+            setFormData({});
+            setEditingId(null);
+            if (activeTab === 'drivers') setShowDriverForm(true);
+            else if (activeTab === 'staff') setShowStaffForm(true);
+            else if (activeTab === 'parents') setShowParentForm(true);
+            else if (activeTab === 'students') setShowStudentForm(true);
+            else if (activeTab === 'managers') setShowManagerForm(true);
+          }}
+        >
+          <Text style={styles.addBtnText}>+ إضافة جديد</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
-  container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
-  header: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-    elevation: 2,
-  },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  headerButtons: { flexDirection: 'row', alignItems: 'center' },
-  expiryWarning: { color: '#EF4444', fontWeight: 'bold', fontSize: 12, marginRight: 8 },
-  logoutBtn: { backgroundColor: '#FEE2E2', padding: 8, borderRadius: 8 },
-  logoutBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 12 },
-  tabContainer: { backgroundColor: '#FFF', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EEE', elevation: 1 },
-  scrollTabContainer: { flexDirection: 'row-reverse', paddingHorizontal: 10 },
-  tabButton: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#E2E8F0', marginHorizontal: 4 },
-  activeTab: { backgroundColor: '#007BFF' },
-  tabButtonText: { color: '#475569', fontSize: 13, fontWeight: '600' },
-  activeTabButtonText: { color: '#FFF', fontWeight: 'bold' },
-  addSection: { padding: 15, alignItems: 'flex-end' },
-  addBtn: { backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, elevation: 2 },
-  addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
-  formContainer: { backgroundColor: '#FFF', margin: 15, padding: 15, borderRadius: 12, elevation: 3 },
-  inputWrapper: { marginBottom: 10 },
-  inputLabel: { fontSize: 13, color: '#475569', marginBottom: 4, textAlign: 'right' },
-  input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, textAlign: 'right', fontSize: 15, backgroundColor: '#F8FAFC' },
-  checkboxContainer: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 10 },
-  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: '#007BFF', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
-  checkboxChecked: { backgroundColor: '#007BFF' },
-  checkboxLabel: { fontSize: 14, color: '#333' },
-  saveBtn: { backgroundColor: '#007BFF', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 10, elevation: 2 },
-  saveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
-  filterSection: { paddingHorizontal: 15, marginBottom: 5, marginTop: 10 },
-  searchInput: { backgroundColor: '#FFF', padding: 12, borderRadius: 10, textAlign: 'right', elevation: 2, borderWidth: 1, borderColor: '#E2E8F0' },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 15, backgroundColor: '#FFF', marginLeft: 8, elevation: 1, borderWidth: 1, borderColor: '#E2E8F0' },
-  filterChipActive: { backgroundColor: '#007BFF' },
-  filterChipText: { fontSize: 12, color: '#64748B' },
-  filterChipTextActive: { color: '#FFF', fontWeight: 'bold' },
-  listContainer: { padding: 15 },
-  listTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', textAlign: 'right', marginBottom: 12, borderRightWidth: 4, borderRightColor: '#007BFF', paddingRight: 10 },
-  card: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', elevation: 2 },
-  cardInfo: { flex: 1, alignItems: 'flex-end' },
-  cardName: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 4 },
-  cardSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  cardDate: { fontSize: 10, color: '#94A3B8', marginTop: 4 },
-  cardActions: { flexDirection: 'column', alignItems: 'center', marginLeft: 10 },
-  editBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#DBEAFE', marginBottom: 6 },
-  editBtnText: { color: '#3B82F6', fontWeight: 'bold', fontSize: 12 },
-  deleteBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#FEE2E2' },
-  deleteBtnText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
-  emptyListText: { textAlign: 'center', color: '#94A3B8', marginTop: 30, fontSize: 15 },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
+  expiryText: { fontSize: 12, color: '#EF4444', marginTop: 4 },
+  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold' },
+  tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
+  tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: '#F1F5F9' },
+  tabActive: { backgroundColor: '#3B82F6' },
+  tabText: { fontSize: 14, color: '#64748B', fontWeight: 'bold' },
+  tabTextActive: { color: '#FFF' },
+  searchWrapper: { padding: 15 },
+  searchInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, textAlign: 'right' },
+  addBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 20 },
+  addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  inputWrapper: { marginBottom: 15 },
+  inputLabel: { fontSize: 14, color: '#475569', marginBottom: 5, textAlign: 'right' },
+  input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' }
 });

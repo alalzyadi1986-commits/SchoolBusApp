@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, ActivityIndicator, Linking } from 'react-native';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { ref, onValue, update, push, set } from "firebase/database";
@@ -27,13 +27,19 @@ export default function ParentScreen() {
   const [schoolLoc, setSchoolLoc] = useState(null);
 
   useEffect(() => {
-    if (!schoolId || !user?.username) return;
+    if (!schoolId || !user?.username) {
+      setLoading(false);
+      return;
+    }
 
     // 1. الاشتراك في بيانات الطالب
     const unsubStudent = onValue(ref(db, `schools/${schoolId}/students`), (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const myStudentKey = Object.keys(data).find(key => data[key].parent_username === user.username);
+        const myStudentKey = Object.keys(data).find(key => 
+          data[key].parentUsername === user.username || 
+          data[key].parent_username === user.username
+        );
         if (myStudentKey) setStudentInfo({ id: myStudentKey, ...data[myStudentKey] });
       }
       setLoading(false);
@@ -49,46 +55,54 @@ export default function ParentScreen() {
 
     // 2. طلب صلاحيات الموقع
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        setMyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({});
+          setMyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        }
+      } catch (e) {
+        console.log('Location permission error:', e);
       }
     })();
 
     return () => unsubStudent();
   }, [schoolId, user?.username]);
 
-  // 3. الاشتراك في بيانات السائق والمرافقة والBus (مستقل)
+  // 3. الاشتراك في بيانات السائق والمرافقة والBus
   useEffect(() => {
-    if (!schoolId || !studentInfo?.driver_id) return;
+    const driverId = studentInfo?.driverUsername || studentInfo?.driver_id;
+    if (!schoolId || !driverId) return;
 
-    const unsubDriver = onValue(ref(db, `schools/${schoolId}/drivers/${studentInfo.driver_id}`), (snap) => setDriverInfo(snap.val()));
+    const unsubDriver = onValue(ref(db, `schools/${schoolId}/drivers/${driverId}`), (snap) => setDriverInfo(snap.val()));
     
     const unsubStaff = onValue(ref(db, `schools/${schoolId}/staff`), (snap) => {
       const staffData = snap.val();
-      if (staffData) setStaffInfo(Object.values(staffData).find(s => s.driver_id === studentInfo.driver_id));
+      if (staffData) {
+        setStaffInfo(Object.values(staffData).find(s => 
+          s.driverUsername === driverId || 
+          s.driver_id === driverId
+        ));
+      }
     });
 
-    const unsubBus = onValue(ref(db, `schools/${schoolId}/bus/${studentInfo.driver_id}`), (snap) => {
+    const unsubBus = onValue(ref(db, `schools/${schoolId}/bus/${driverId}`), (snap) => {
       const busData = snap.val();
       if (busData && busData.isActive) {
         const newLoc = { latitude: busData.latitude, longitude: busData.longitude };
         
-        // إذا كانت هذه أول مرة نستلم فيها الموقع، نضعه مباشرة
         if (!busLocation) {
           setBusLocation(newLoc);
           setAnimatedBusLocation(newLoc);
         } else {
-          // بدء عملية التحريك السلس من الموقع القديم إلى الجديد
           animateBus(busLocation, newLoc);
           setBusLocation(newLoc);
         }
 
         if (myLocation) {
           const dist = calculateDistance(busData.latitude, busData.longitude, myLocation.latitude, myLocation.longitude);
-          if (dist < alertMinutes * 0.5 && !notified && studentInfo.status !== 'absent_today') {
-            Alert.alert("🔔 تنبيه هام 🚌", `باص ${studentInfo.name} يقترب من موقعك! سيصل خلال ${alertMinutes} دقائق تقريباً.`);
+          if (dist < alertMinutes * 0.5 && !notified && studentInfo?.status !== 'absent_today') {
+            Alert.alert("🔔 تنبيه هام 🚌", `باص ${studentInfo?.name} يقترب من موقعك! سيصل خلال ${alertMinutes} دقائق تقريباً.`);
             setNotified(true);
           }
         }
@@ -99,7 +113,7 @@ export default function ParentScreen() {
     });
 
     return () => { unsubDriver(); unsubStaff(); unsubBus(); };
-  }, [schoolId, studentInfo?.driver_id, myLocation, alertMinutes, notified]);
+  }, [schoolId, studentInfo, myLocation, alertMinutes, notified]);
 
   const reportAbsence = () => {
     if (!studentInfo) return;
@@ -116,7 +130,6 @@ export default function ParentScreen() {
             lastUpdate: new Date().toISOString()
           });
           
-          // إضافة سجل للتقرير
           const reportRef = ref(db, `schools/${schoolId}/reports`);
           const newReport = push(reportRef);
           await set(newReport, {
@@ -146,10 +159,9 @@ export default function ParentScreen() {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
-  // دالة لتحريك الباص بسلاسة خلال فترة التحديث (10 ثوانٍ)
   const animateBus = (start, end) => {
     let startTime = null;
-    const duration = 10000; // يجب أن تتوافق مع timeInterval في تطبيق السائق
+    const duration = 10000;
 
     const step = (timestamp) => {
       if (!startTime) startTime = timestamp;
@@ -181,7 +193,7 @@ export default function ParentScreen() {
         <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>تتبع الباص 🚌</Text>
-          <Text style={styles.parentName}>عائلة {user?.family_name}</Text>
+          <Text style={styles.parentName}>عائلة {user?.name || user?.family_name}</Text>
         </View>
       </View>
 
@@ -230,7 +242,12 @@ export default function ParentScreen() {
 
       <MapView
         style={styles.map}
-        initialRegion={{ latitude: myLocation?.latitude || 31.9454, longitude: myLocation?.longitude || 35.9284, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+        initialRegion={{ 
+          latitude: myLocation?.latitude || schoolLoc?.latitude || 31.9454, 
+          longitude: myLocation?.longitude || schoolLoc?.longitude || 35.9284, 
+          latitudeDelta: 0.05, 
+          longitudeDelta: 0.05 
+        }}
         showsUserLocation={true}
       >
         {myLocation && <Marker coordinate={myLocation} title="منزلي" pinColor="green" />}

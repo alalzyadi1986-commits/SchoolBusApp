@@ -14,30 +14,38 @@ export default function StaffScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!schoolId) return;
+    if (!schoolId) {
+      setLoading(false);
+      return;
+    }
     const studentsRef = ref(db, `schools/${schoolId}/students`);
     const unsubscribe = onValue(studentsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
+        const driverId = user.driverUsername || user.driver_id;
         const list = Object.keys(data)
           .map(key => ({ id: key, ...data[key] }))
-          .filter(s => (!user.driver_id || s.driver_id === user.driver_id) && s.status !== 'absent_today');
+          .filter(s => {
+            const studentDriverId = s.driverUsername || s.driver_id;
+            return (!driverId || studentDriverId === driverId) && s.status !== 'absent_today';
+          });
         setStudents(list);
-      } else { setStudents([]); }
+      } else { 
+        setStudents([]); 
+      }
       setLoading(false);
     });
     return () => unsubscribe();
   }, [schoolId, user]);
 
   const toggleStatus = async (student, currentStatus) => {
-    if (user?.permissions && !user.permissions.markAttendance) {
+    if (user?.permissions && user.permissions.markAttendance === false) {
       Alert.alert('صلاحية مرفوضة', 'ليس لديك صلاحية تسجيل الحضور');
       return;
     }
     const newStatus = currentStatus === 'present' ? 'pending' : 'present';
     await update(ref(db, `schools/${schoolId}/students/${student.id}`), { status: newStatus });
     
-    // إضافة سجل للتقرير
     if (newStatus === 'present') {
       const reportRef = ref(db, `schools/${schoolId}/reports`);
       const newReport = push(reportRef);
@@ -52,6 +60,10 @@ export default function StaffScreen() {
   };
 
   const callParent = async (parentUsername) => {
+    if (!parentUsername) {
+      Alert.alert('خطأ', 'رقم ولي الأمر غير متوفر');
+      return;
+    }
     const parentRef = ref(db, `schools/${schoolId}/parents/${parentUsername}`);
     onValue(parentRef, (snap) => {
       const p = snap.val();
@@ -78,7 +90,12 @@ export default function StaffScreen() {
         contentContainerStyle={{ padding: 15 }}
         renderItem={({ item }) => (
           <View style={styles.studentCard}>
-            <TouchableOpacity style={styles.callBtn} onPress={() => callParent(item.parent_username)}><Text style={styles.callBtnText}>📞 اتصل</Text></TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.callBtn} 
+              onPress={() => callParent(item.parentUsername || item.parent_username)}
+            >
+              <Text style={styles.callBtnText}>📞 اتصل</Text>
+            </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.statusToggle, { backgroundColor: item.status === 'present' ? '#10B981' : '#F1F5F9' }]}
               onPress={() => toggleStatus(item, item.status)}

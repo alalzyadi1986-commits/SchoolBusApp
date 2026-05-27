@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // إعداد طريقة تكيّف الإشعارات عند ظهورها في الأمام
 Notifications.setNotificationHandler({
@@ -34,8 +35,19 @@ export async function registerForPushNotificationsAsync() {
       console.log('Failed to get push token for push notification!');
       return null;
     }
-    //Expo Token
-    token = (await Notifications.getExpoPushTokenAsync()).data;
+    
+    // في SDK الحديثة، يجب تمرير projectId
+    const projectId = 
+      Constants?.expoConfig?.extra?.eas?.projectId ?? 
+      Constants?.easConfig?.projectId;
+
+    try {
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId: projectId
+      })).data;
+    } catch (e) {
+      console.log('Error getting push token:', e);
+    }
   } else {
     console.log('Must use physical device for Push Notifications');
   }

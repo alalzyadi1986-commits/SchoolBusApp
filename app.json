@@ -20,7 +20,8 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "location",
-          "fetch"
+          "fetch",
+          "remote-notification"
         ],
         "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
         "NSLocationAlwaysUsageDescription": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً",
@@ -38,7 +39,8 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "NOTIFICATIONS"
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
       ]
     },
     "notification": {
@@ -49,7 +51,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "نحتاج لموقعك لتتبع الباص وإبلاغ الأهالي حتى لو كان التطبيق مغلقاً"
+        }
+      ]
     ]
   }
 }

@@ -13,6 +13,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from '@react-navigation/native';
 import { loginUser } from '../services/authService';
 import { saveUserSession } from '../services/sessionService';
@@ -47,57 +48,35 @@ const i18n = {
     usernamePlaceholder: 'Enter your username',
     passwordLabel: 'Password',
     passwordPlaceholder: 'Enter your password',
-    rememberMe: 'Remember me',
+    rememberMe: 'Remember Me',
     loginBtn: 'Login',
     contactUs: '📞 Contact us to subscribe',
-    errorEmpty: 'Please enter your username and password.',
+    errorEmpty: 'Please enter username and password.',
     errorInactive: 'School subscription is inactive or not found.',
-    errorWrong: 'Incorrect username or password.',
-    errorGeneral: 'An error occurred.',
-  },
+    errorWrong: 'Invalid username or password.',
+    errorGeneral: 'An error occurred during login.',
+  }
 };
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-
   const [lang, setLang] = useState('ar');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
-  const [isPasswordSecure, setIsPasswordSecure] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [usernameFocused, setUsernameFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
+
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const formAnim = useRef(new Animated.Value(0)).current;
+  const langAnim = useRef(new Animated.Value(1)).current;
 
   const t = i18n[lang];
-  const isRTL = lang === 'ar';
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const logoAnim = useRef(new Animated.Value(0)).current;
-  const langAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     loadSavedCredentials();
-
-    Animated.sequence([
-      Animated.timing(logoAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]),
+    Animated.stagger(200, [
+      Animated.timing(logoAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.spring(formAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -122,10 +101,6 @@ export default function LoginScreen() {
     } catch (error) {
       console.log('Error loading credentials:', error);
     }
-  };
-
-  const handleContactUs = () => {
-    Linking.openURL('https://wa.me/+9660000000000');
   };
 
   const handleLogin = async () => {
@@ -160,23 +135,28 @@ export default function LoginScreen() {
 
       await saveUserSession(userData);
 
-      const token = await registerForPushNotificationsAsync();
-      if (token && userData?.username) {
-        await userData.savePushToken?.(token);
+      // Register for notifications
+      try {
+        const token = await registerForPushNotificationsAsync();
+        // Note: Actual saving to DB should be handled based on user role
+      } catch (e) {
+        console.log('Notification registration skipped or failed');
       }
 
-      // Navigate by role
-      if (userData.role === 'superadmin') navigation.replace('SuperAdminScreen', { user: userData });
-      else if (userData.role === 'school') navigation.replace('SchoolScreen', { user: userData });
-      else if (userData.role === 'driver') navigation.replace('DriverScreen', { user: userData });
-      else if (userData.role === 'staff') navigation.replace('StaffScreen', { user: userData });
-      else if (userData.role === 'parent') navigation.replace('ParentScreen', { user: userData });
+      // Navigate by role and pass schoolId
+      const params = { user: userData, schoolId: userData.schoolId };
+      
+      if (userData.role === 'superadmin') navigation.replace('SuperAdminScreen', params);
+      else if (userData.role === 'school') navigation.replace('SchoolScreen', params);
+      else if (userData.role === 'driver') navigation.replace('DriverScreen', params);
+      else if (userData.role === 'staff') navigation.replace('StaffScreen', params);
+      else if (userData.role === 'parent') navigation.replace('ParentScreen', params);
 
       setLoading(false);
 
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('❌', t.errorGeneral);
+      Alert.alert('❌', t.errorWrong);
       setLoading(false);
     }
   };
@@ -184,12 +164,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0A1628" />
-      <View style={StyleSheet.absoluteFill}>
-        <View style={styles.circle1} />
-        <View style={styles.circle2} />
-        <View style={styles.circle3} />
-      </View>
-
+      
       <Animated.View style={[styles.langBtnWrapper, { opacity: logoAnim }]}>
         <TouchableOpacity style={styles.langBtn} onPress={toggleLang} activeOpacity={0.8}>
           <Animated.Text style={[styles.langBtnText, { opacity: langAnim }]}>
@@ -199,105 +174,99 @@ export default function LoginScreen() {
       </Animated.View>
 
       <View style={styles.content}>
-        <Animated.View style={[styles.logoSection, { opacity: logoAnim }]}>
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoIcon}>🚌</Text>
-          </View>
-          <Text style={styles.appName}>{i18n[lang].appName}</Text>
-          <Text style={styles.appTagline}>{i18n[lang].appTagline}</Text>
+        <Animated.View style={[styles.logoContainer, { opacity: logoAnim, transform: [{ scale: logoAnim }] }]}>
+          <Text style={styles.logoEmoji}>🚌</Text>
+          <Text style={styles.appName}>{t.appName}</Text>
+          <Text style={styles.appTagline}>{t.appTagline}</Text>
         </Animated.View>
 
-        <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Text style={[styles.cardTitle, { textAlign: isRTL ? 'right' : 'left' }]}>{i18n[lang].loginTitle}</Text>
-          <Text style={[styles.cardSubtitle, { textAlign: isRTL ? 'right' : 'left' }]}>{i18n[lang].loginSubtitle}</Text>
+        <Animated.View style={[styles.formContainer, { 
+          opacity: formAnim, 
+          transform: [{ translateY: formAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }] 
+        }]}>
+          <Text style={styles.loginTitle}>{t.loginTitle}</Text>
+          <Text style={styles.loginSubtitle}>{t.loginSubtitle}</Text>
 
-          <Text style={[styles.inputLabel, { textAlign: isRTL ? 'right' : 'left' }]}>👤 {i18n[lang].usernameLabel}</Text>
-          <View style={[styles.inputContainer, usernameFocused && styles.inputContainerFocused]}>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.inputLabel}>{t.usernameLabel}</Text>
             <TextInput
-              style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
-              placeholder={i18n[lang].usernamePlaceholder}
+              style={styles.input}
+              placeholder={t.usernamePlaceholder}
               placeholderTextColor="#94A3B8"
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
-              onFocus={() => setUsernameFocused(true)}
-              onBlur={() => setUsernameFocused(false)}
             />
           </View>
 
-          <Text style={[styles.inputLabel, { textAlign: isRTL ? 'right' : 'left', marginTop: 14 }]}>🔒 {i18n[lang].passwordLabel}</Text>
-          <View style={[styles.inputContainer, passwordFocused && styles.inputContainerFocused]}>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.inputLabel}>{t.passwordLabel}</Text>
             <TextInput
-              style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
-              placeholder={i18n[lang].passwordPlaceholder}
+              style={styles.input}
+              placeholder={t.passwordPlaceholder}
               placeholderTextColor="#94A3B8"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry={isPasswordSecure}
-              onFocus={() => setPasswordFocused(true)}
-              onBlur={() => setPasswordFocused(false)}
+              secureTextEntry
             />
-            <TouchableOpacity onPress={() => setIsPasswordSecure(!isPasswordSecure)} style={styles.eyeButton}>
-              <Text style={styles.eyeIcon}>{isPasswordSecure ? '👁️' : '🙈'}</Text>
-            </TouchableOpacity>
           </View>
 
-          <View style={[styles.rememberMeRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <Text style={styles.rememberMeText}>{i18n[lang].rememberMe}</Text>
-            <TouchableOpacity
-              style={[styles.toggle, rememberMe && styles.toggleActive]}
-              onPress={() => setRememberMe(!rememberMe)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.toggleThumb, { left: rememberMe ? undefined : 3, right: rememberMe ? 3 : undefined }]} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={[styles.loginButton, loading && styles.loginButtonDisabled]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
-            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.loginButtonText}>{isRTL ? `← ${i18n[lang].loginBtn}` : `${i18n[lang].loginBtn} →`}</Text>}
+          <TouchableOpacity 
+            style={styles.rememberRow} 
+            onPress={() => setRememberMe(!rememberMe)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe && <Text style={styles.checkIcon}>✓</Text>}
+            </View>
+            <Text style={styles.rememberText}>{t.rememberMe}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.contactButton} onPress={handleContactUs} activeOpacity={0.8}>
-            <Text style={styles.contactButtonText}>{i18n[lang].contactUs}</Text>
+          <TouchableOpacity 
+            style={[styles.loginBtn, loading && styles.loginBtnDisabled]} 
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginBtnText}>{t.loginBtn}</Text>
+            )}
           </TouchableOpacity>
         </Animated.View>
+
+        <TouchableOpacity style={styles.contactBtn} onPress={() => Linking.openURL('https://wa.me/+9660000000000')}>
+          <Text style={styles.contactText}>{t.contactUs}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-// احتفظت بالـ styles كما هي دون أي تغيير
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0A1628' },
-  circle1: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#1E3A5F', top: -80, right: -80, opacity: 0.6 },
-  circle2: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: '#F59E0B', bottom: 80, left: -60, opacity: 0.08 },
-  circle3: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: '#3B82F6', top: height * 0.4, right: -40, opacity: 0.1 },
-  langBtnWrapper: { position: 'absolute', top: Platform.OS === 'ios' ? 55 : 20, left: 20, zIndex: 100 },
-  langBtn: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
-  langBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 20 },
-  logoSection: { alignItems: 'center', marginBottom: 24 },
-  logoPlaceholder: { width: 80, height: 80, borderRadius: 22, backgroundColor: '#1E3A5F', borderWidth: 2, borderColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', marginBottom: 12, elevation: 8 },
-  logoIcon: { fontSize: 36 },
-  appName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1, marginBottom: 4 },
-  appTagline: { fontSize: 12, color: '#94A3B8' },
-  card: { width: '100%', maxWidth: 420, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, elevation: 15 },
-  cardTitle: { fontSize: 20, fontWeight: '800', color: '#0A1628', marginBottom: 4 },
-  cardSubtitle: { fontSize: 12, color: '#94A3B8', marginBottom: 20 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 14, height: 48 },
-  inputContainerFocused: { borderColor: '#F59E0B', backgroundColor: '#FFFBF0' },
-  input: { flex: 1, fontSize: 14, color: '#0A1628', height: '100%' },
-  eyeButton: { padding: 6 },
-  eyeIcon: { fontSize: 16 },
-  rememberMeRow: { alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginBottom: 20 },
-  rememberMeText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
-  toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', justifyContent: 'center', position: 'relative' },
-  toggleActive: { backgroundColor: '#F59E0B' },
-  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFF', position: 'absolute', top: 2.5, elevation: 2 },
-  loginButton: { backgroundColor: '#0A1628', borderRadius: 14, height: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  loginButtonDisabled: { opacity: 0.7 },
-  loginButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
-  contactButton: { borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 14, height: 44, justifyContent: 'center', alignItems: 'center' },
-  contactButtonText: { color: '#64748B', fontSize: 13, fontWeight: '700' },
+  langBtnWrapper: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
+  langBtn: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
+  langBtnText: { color: '#fff', fontWeight: 'bold' },
+  content: { flex: 1, justifyContent: 'center', padding: 25 },
+  logoContainer: { alignItems: 'center', marginBottom: 40 },
+  logoEmoji: { fontSize: 80, marginBottom: 10 },
+  appName: { fontSize: 28, fontWeight: 'bold', color: '#fff', textAlign: 'center' },
+  appTagline: { fontSize: 16, color: '#94A3B8', marginTop: 5, textAlign: 'center' },
+  formContainer: { backgroundColor: '#fff', borderRadius: 25, padding: 25, elevation: 10 },
+  loginTitle: { fontSize: 24, fontWeight: 'bold', color: '#1E293B', marginBottom: 5 },
+  loginSubtitle: { fontSize: 14, color: '#64748B', marginBottom: 25 },
+  inputWrapper: { marginBottom: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: '#475569', marginBottom: 8 },
+  input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 15, fontSize: 16, color: '#1E293B' },
+  rememberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 25 },
+  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#3B82F6', borderRadius: 6, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: '#3B82F6' },
+  checkIcon: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  rememberText: { fontSize: 14, color: '#475569' },
+  loginBtn: { backgroundColor: '#3B82F6', borderRadius: 12, padding: 18, alignItems: 'center', elevation: 4 },
+  loginBtnDisabled: { opacity: 0.7 },
+  loginBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  contactBtn: { marginTop: 30, alignItems: 'center' },
+  contactText: { color: '#94A3B8', fontSize: 14 }
 });
