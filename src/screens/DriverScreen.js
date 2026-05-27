@@ -33,6 +33,7 @@ import { updateBusLocation } from '../services/busService';
 
 const { width, height } = Dimensions.get('window');
 const LOCATION_TASK_NAME = 'background-location-task';
+const mapRef = useRef(null);
 
 export default function DriverScreen() {
   const route = useRoute();
@@ -78,6 +79,28 @@ export default function DriverScreen() {
     (async () => {
       try {
         await requestLocationPermission();
+        Location.watchPositionAsync(
+  {
+    accuracy: Location.Accuracy.High,
+    timeInterval: 5000,
+    distanceInterval: 5,
+  },
+  (location) => {
+    setCurrentLoc({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    });
+       mapRef.current?.animateToRegion({
+  latitude: location.coords.latitude,
+  longitude: location.coords.longitude,
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.01,
+}, 1000);
+    setCurrentSpeed(
+      Math.round((location.coords.speed || 0) * 3.6)
+    );
+  }
+);
         await Location.requestBackgroundPermissionsAsync();
         const loc = await Location.getCurrentPositionAsync({
          accuracy: Location.Accuracy.High,
@@ -87,6 +110,11 @@ export default function DriverScreen() {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
+        const speed = Math.round(
+  (location.coords.speed || 0) * 3.6
+);
+
+setCurrentSpeed(speed < 5 ? 0 : speed);
         const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
         setIsTripActive(hasStarted);
       } catch (error) {
@@ -264,6 +292,7 @@ export default function DriverScreen() {
 
 {currentLoc && (
   <MapView
+    ref={mapRef}
     style={styles.map}
     initialRegion={{
       latitude: currentLoc.latitude,
