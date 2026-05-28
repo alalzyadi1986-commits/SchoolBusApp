@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  Dimensions,
   FlatList,
   Alert,
   ActivityIndicator,
@@ -17,6 +17,7 @@ import MapView, { Marker } from 'react-native-maps';
 
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -24,7 +25,6 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import {
   ref,
   onValue,
-  update,
 } from 'firebase/database';
 
 import { db } from '../../../firebaseConfig';
@@ -40,15 +40,12 @@ import { updateBusLocation } from '../../../services/busService';
 
 import { clearUserSession } from '../../../services/sessionService';
 
-const { width } = Dimensions.get('window');
-
 const LOCATION_TASK_NAME = 'background-location-task';
-
-const TRACKING_INTERVAL = 5000;
 
 export default function DriverScreen() {
 
   const route = useRoute();
+
   const navigation = useNavigation();
 
   const { schoolId, user } = route.params || {};
@@ -70,8 +67,11 @@ export default function DriverScreen() {
   useEffect(() => {
 
     if (!schoolId || !user?.username) {
+
       setLoading(false);
+
       return;
+
     }
 
     AsyncStorage.setItem(
@@ -82,7 +82,9 @@ export default function DriverScreen() {
     TaskManager.isTaskRegisteredAsync(
       LOCATION_TASK_NAME
     ).then(active => {
+
       setIsTripActive(active);
+
     });
 
     const studentsRef = ref(
@@ -101,7 +103,7 @@ export default function DriverScreen() {
           const list = Object.keys(data)
             .map((key) => ({
               id: key,
-              ...data[key]
+              ...data[key],
             }))
             .filter(student => {
 
@@ -134,7 +136,8 @@ export default function DriverScreen() {
 
         await requestLocationPermission();
 
-        const initialLoc = await getCurrentLocation();
+        const initialLoc =
+          await getCurrentLocation();
 
         if (initialLoc) {
 
@@ -163,7 +166,7 @@ export default function DriverScreen() {
               accuracy:
                 Location.Accuracy.BestForNavigation,
 
-              timeInterval: TRACKING_INTERVAL,
+              timeInterval: 5000,
 
               distanceInterval: 5,
             },
@@ -206,7 +209,10 @@ export default function DriverScreen() {
 
       } catch (e) {
 
-        console.log('Location setup error:', e);
+        console.log(
+          'Location setup error:',
+          e
+        );
 
         Alert.alert(
           'خطأ',
@@ -224,7 +230,9 @@ export default function DriverScreen() {
       unsubscribeStudents();
 
       if (watchSubscription.current) {
+
         watchSubscription.current.remove();
+
       }
 
     };
@@ -241,8 +249,8 @@ export default function DriverScreen() {
       if (status !== 'granted') {
 
         Alert.alert(
-          "صلاحية مرفوضة",
-          "يجب السماح بالوصول للموقع دائماً."
+          'صلاحية مرفوضة',
+          'يجب السماح بالوصول للموقع دائماً.'
         );
 
         return;
@@ -255,16 +263,16 @@ export default function DriverScreen() {
           accuracy:
             Location.Accuracy.BestForNavigation,
 
-          timeInterval: TRACKING_INTERVAL,
+          timeInterval: 5000,
 
           distanceInterval: 5,
 
           foregroundService: {
-            notificationTitle: "تتبع الباص نشط 🚌",
+            notificationTitle: 'تتبع الباص نشط 🚌',
             notificationBody:
-              "يتم مشاركة موقعك الآن مع أولياء الأمور",
+              'يتم مشاركة موقعك الآن مع أولياء الأمور',
 
-            notificationColor: "#3B82F6",
+            notificationColor: '#3B82F6',
           },
         }
       );
@@ -272,15 +280,15 @@ export default function DriverScreen() {
       setIsTripActive(true);
 
       Alert.alert(
-        "تم بدء الرحلة",
-        "يتم الآن تتبع الباص مباشرة."
+        'تم بدء الرحلة',
+        'يتم الآن تتبع الباص مباشرة.'
       );
 
     } catch (e) {
 
       Alert.alert(
-        "خطأ",
-        "فشل بدء تتبع الموقع."
+        'خطأ',
+        e.message || 'فشل بدء الرحلة'
       );
 
     }
@@ -295,29 +303,18 @@ export default function DriverScreen() {
         LOCATION_TASK_NAME
       );
 
-      await update(
-        ref(
-          db,
-          `schools/${schoolId}/bus/${user.username}`
-        ),
-        {
-          isActive: false,
-          lastActive: new Date().toISOString(),
-        }
-      );
-
       setIsTripActive(false);
 
       Alert.alert(
-        "تم إنهاء الرحلة",
-        "توقف تتبع الموقع."
+        'تم إنهاء الرحلة',
+        'تم إيقاف تتبع الباص.'
       );
 
     } catch (e) {
 
       Alert.alert(
-        "خطأ",
-        "حدث خطأ أثناء إيقاف الرحلة."
+        'خطأ',
+        'حدث خطأ أثناء إيقاف الرحلة.'
       );
 
     }
@@ -327,17 +324,17 @@ export default function DriverScreen() {
   const handleLogout = () => {
 
     Alert.alert(
-      "تسجيل الخروج",
-      "هل أنت متأكد؟",
+      'تسجيل الخروج',
+      'هل أنت متأكد؟',
 
       [
         {
-          text: "إلغاء",
-          style: "cancel"
+          text: 'إلغاء',
+          style: 'cancel',
         },
 
         {
-          text: "خروج",
+          text: 'خروج',
 
           onPress: async () => {
 
@@ -349,9 +346,9 @@ export default function DriverScreen() {
                 index: 0,
                 routes: [
                   {
-                    name: 'Login'
-                  }
-                ]
+                    name: 'Login',
+                  },
+                ],
               });
 
             } catch (error) {
@@ -363,8 +360,8 @@ export default function DriverScreen() {
 
             }
 
-          }
-        }
+          },
+        },
       ]
     );
 
@@ -379,15 +376,15 @@ export default function DriverScreen() {
     } else {
 
       Alert.alert(
-        "خطأ",
-        "رقم الهاتف غير متوفر"
+        'خطأ',
+        'رقم الهاتف غير متوفر'
       );
 
     }
 
   };
 
-  if (loading || !currentLoc) {
+  if (loading) {
 
     return (
 
@@ -399,7 +396,7 @@ export default function DriverScreen() {
         />
 
         <Text style={{ marginTop: 15 }}>
-          جاري تحديد موقعك الحقيقي...
+          جاري تحميل البيانات...
         </Text>
 
       </View>
@@ -492,8 +489,8 @@ export default function DriverScreen() {
         style={styles.map}
 
         region={{
-          latitude: currentLoc.latitude,
-          longitude: currentLoc.longitude,
+          latitude: currentLoc?.latitude || 31.9454,
+          longitude: currentLoc?.longitude || 35.9284,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
@@ -505,25 +502,29 @@ export default function DriverScreen() {
         showsMyLocationButton={true}
       >
 
-        <Marker
-          coordinate={currentLoc}
-          tracksViewChanges={false}
-        >
+        {
+          currentLoc && (
+            <Marker
+              coordinate={currentLoc}
+              tracksViewChanges={false}
+            >
 
-          <View style={styles.busMarker}>
+              <View style={styles.busMarker}>
 
-            <Image
-              source={{
-                uri:
-                  'https://cdn-icons-png.flaticon.com/512/3448/3448339.png'
-              }}
+                <Image
+                  source={{
+                    uri:
+                      'https://cdn-icons-png.flaticon.com/512/3448/3448339.png'
+                  }}
 
-              style={styles.busImage}
-            />
+                  style={styles.busImage}
+                />
 
-          </View>
+              </View>
 
-        </Marker>
+            </Marker>
+          )
+        }
 
       </MapView>
 
@@ -645,13 +646,13 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: '#F8FAFC',
   },
 
   centered: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
 
   header: {
@@ -661,30 +662,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0'
+    borderBottomColor: '#E2E8F0',
   },
 
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E293B'
+    color: '#1E293B',
   },
 
   driverName: {
     fontSize: 14,
-    color: '#64748B'
+    color: '#64748B',
   },
 
   logoutBtn: {
     padding: 8,
     backgroundColor: '#FEE2E2',
-    borderRadius: 8
+    borderRadius: 8,
   },
 
   logoutText: {
     color: '#EF4444',
     fontWeight: 'bold',
-    fontSize: 12
+    fontSize: 12,
   },
 
   statusCard: {
@@ -692,7 +693,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around'
+    justifyContent: 'space-around',
   },
 
   speedCircle: {
@@ -702,44 +703,44 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#3B82F6',
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
 
   speedValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1E293B'
+    color: '#1E293B',
   },
 
   speedUnit: {
     fontSize: 10,
-    color: '#64748B'
+    color: '#64748B',
   },
 
   tripBtn: {
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 12,
-    elevation: 3
+    elevation: 3,
   },
 
   startBtn: {
-    backgroundColor: '#10B981'
+    backgroundColor: '#10B981',
   },
 
   stopBtn: {
-    backgroundColor: '#EF4444'
+    backgroundColor: '#EF4444',
   },
 
   tripBtnText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold'
+    fontWeight: 'bold',
   },
 
   map: {
     height: 260,
-    width: '100%'
+    width: '100%',
   },
 
   busMarker: {
@@ -748,25 +749,25 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     elevation: 5,
     borderWidth: 2,
-    borderColor: '#3B82F6'
+    borderColor: '#3B82F6',
   },
 
   busImage: {
     width: 40,
     height: 40,
-    resizeMode: 'contain'
+    resizeMode: 'contain',
   },
 
   studentListContainer: {
     flex: 1,
-    padding: 15
+    padding: 15,
   },
 
   listTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 10,
-    textAlign: 'right'
+    textAlign: 'right',
   },
 
   studentItem: {
@@ -777,29 +778,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 1
+    elevation: 1,
   },
 
   studentName: {
     fontSize: 14,
-    fontWeight: 'bold'
+    fontWeight: 'bold',
   },
 
   studentSub: {
     fontSize: 12,
-    color: '#64748B'
+    color: '#64748B',
   },
 
   callBtn: {
     backgroundColor: '#3B82F6',
     padding: 8,
-    borderRadius: 8
+    borderRadius: 8,
   },
 
   callBtnText: {
     color: '#FFF',
     fontSize: 12,
-    fontWeight: 'bold'
-  }
+    fontWeight: 'bold',
+  },
 
 });
