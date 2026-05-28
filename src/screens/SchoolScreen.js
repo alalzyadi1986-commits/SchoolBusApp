@@ -10,14 +10,15 @@ import {
   ScrollView,
   ActivityIndicator,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { db } from '../firebaseConfig';
 import { ref, set, push, onValue, remove, update } from 'firebase/database';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { clearUserSession } from '../services/sessionService';
 
 export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
-  const schoolName = user?.schoolName || '';
   const [activeTab, setActiveTab] = useState('drivers');
   const [loading, setLoading] = useState(true);
   const [expiryDate, setExpiryDate] = useState('');
@@ -34,19 +35,12 @@ export default function SchoolScreen({ route, navigation }) {
   const [formData, setFormData] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedClassFilter, setSelectedClassFilter] = useState('الكل');
-  const [selectedDriverReport, setSelectedDriverReport] = useState('الكل');
-  const [showDriverForm, setShowDriverForm] = useState(false);
-  const [showStaffForm, setShowStaffForm] = useState(false);
-  const [showParentForm, setShowParentForm] = useState(false);
-  const [showStudentForm, setShowStudentForm] = useState(false);
-  const [showManagerForm, setShowManagerForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [dynamicSchoolName, setDynamicSchoolName] = useState('');
 
   useEffect(() => {
     if (!schoolId) {
       setLoading(false);
-      Alert.alert('خطأ', 'لم يتم العثور على معرف المدرسة. يرجى تسجيل الدخول مرة أخرى.');
       navigation.replace('Login');
       return;
     }
@@ -67,25 +61,20 @@ export default function SchoolScreen({ route, navigation }) {
       });
     };
 
-    const unsubDrivers    = fetchData('drivers', setDrivers);
-    const unsubStaff      = fetchData('staff', setStaff);
-    const unsubParents    = fetchData('parents', setParents);
-    const unsubStudents   = fetchData('students', setStudents);
-    const unsubEmergencies = fetchData('emergencies', setEmergencies);
-    const unsubReports    = fetchData('reports', setReports);
-    const unsubManagers   = fetchData('managers', setManagers);
+    const unsubs = [
+      fetchData('drivers', setDrivers),
+      fetchData('staff', setStaff),
+      fetchData('parents', setParents),
+      fetchData('students', setStudents),
+      fetchData('emergencies', setEmergencies),
+      fetchData('reports', setReports),
+      fetchData('managers', setManagers)
+    ];
 
     setLoading(false);
-
     return () => {
       schoolUnsub();
-      unsubDrivers();
-      unsubStaff();
-      unsubParents();
-      unsubStudents();
-      unsubEmergencies();
-      unsubReports();
-      unsubManagers();
+      unsubs.forEach(u => u());
     };
   }, [schoolId]);
 
@@ -98,7 +87,7 @@ export default function SchoolScreen({ route, navigation }) {
     const path = `schools/${schoolId}/${activeTab}`;
 
     if (action === 'delete' && item) {
-      Alert.alert('حذف', 'هل أنت متأكد من عملية الحذف؟', [
+      Alert.alert('حذف', 'هل أنت متأكد؟', [
         { text: 'إلغاء', style: 'cancel' },
         { text: 'حذف', style: 'destructive', onPress: () => remove(ref(db, `${path}/${item.id}`)) },
       ]);
@@ -111,47 +100,33 @@ export default function SchoolScreen({ route, navigation }) {
       try {
         if (editingId) {
           await update(ref(db, `${path}/${editingId}`), formData);
-          setEditingId(null);
         } else {
-          await set(ref(db, `${path}/${safeUsername}`), formData);
-          
-          const roleMap = {
-            'drivers': 'driver',
-            'staff': 'staff',
-            'parents': 'parent',
-            'students': 'student',
-            'managers': 'manager'
-          };
-          const role = roleMap[activeTab] || activeTab;
-          await set(ref(db, `userIndex/${safeUsername}`), { schoolId, role });
+          await set(ref(db, `${path}/${safeUsername}`), { ...formData, id: safeUsername });
+          const roleMap = { 'drivers': 'driver', 'staff': 'staff', 'parents': 'parent', 'students': 'student', 'managers': 'manager' };
+          await set(ref(db, `userIndex/${safeUsername}`), { schoolId, role: roleMap[activeTab] || activeTab });
         }
         setFormData({});
-        hideAllForms();
+        setEditingId(null);
+        setShowForm(false);
         Alert.alert('تم', 'تم حفظ البيانات بنجاح');
       } catch (error) {
-        Alert.alert('خطأ', 'حدث خطأ أثناء الحفظ: ' + error.message);
+        Alert.alert('خطأ', 'حدث خطأ أثناء الحفظ');
       }
     }
   };
 
-  const hideAllForms = () => {
-    setShowDriverForm(false);
-    setShowStaffForm(false);
-    setShowParentForm(false);
-    setShowStudentForm(false);
-    setShowManagerForm(false);
+  const handleLogout = async () => {
+    Alert.alert("تسجيل الخروج", "هل تريد الخروج؟", [
+      { text: "إلغاء", style: "cancel" },
+      { text: "خروج", onPress: async () => { await clearUserSession(); navigation.replace('Login'); } }
+    ]);
   };
 
-  const startEdit = (item) => {
-    setFormData(item);
-    setEditingId(item.id);
-    hideAllForms();
-    if (activeTab === 'drivers') setShowDriverForm(true);
-    else if (activeTab === 'staff') setShowStaffForm(true);
-    else if (activeTab === 'parents') setShowParentForm(true);
-    else if (activeTab === 'students') setShowStudentForm(true);
-    else if (activeTab === 'managers') setShowManagerForm(true);
-  };
+  const currentData = useMemo(() => {
+    const map = { drivers, staff, parents, students, managers, reports, emergencies };
+    const list = map[activeTab] || [];
+    return list.filter(item => item.name?.includes(searchQuery) || item.username?.includes(searchQuery));
+  }, [activeTab, drivers, staff, parents, students, managers, reports, emergencies, searchQuery]);
 
   const renderInput = (placeholder, field, isNumeric = false) => (
     <View style={styles.inputWrapper} key={field}>
@@ -167,33 +142,13 @@ export default function SchoolScreen({ route, navigation }) {
     </View>
   );
 
-  const filteredDrivers = useMemo(() =>
-    drivers.filter(d => d.name?.includes(searchQuery) || d.username?.includes(searchQuery)),
-    [drivers, searchQuery]);
-
-  const filteredStaff = useMemo(() =>
-    staff.filter(s => s.name?.includes(searchQuery) || s.username?.includes(searchQuery)),
-    [staff, searchQuery]);
-
-  const filteredParents = useMemo(() =>
-    parents.filter(p => p.name?.includes(searchQuery) || p.username?.includes(searchQuery)),
-    [parents, searchQuery]);
-
-  const filteredStudents = useMemo(() =>
-    students.filter(s => 
-      (s.name?.includes(searchQuery) || s.username?.includes(searchQuery)) &&
-      (selectedClassFilter === 'الكل' || s.class === selectedClassFilter)
-    ), [students, searchQuery, selectedClassFilter]);
-
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
-          <Text style={styles.logoutText}>خروج</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
           <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
@@ -203,19 +158,10 @@ export default function SchoolScreen({ route, navigation }) {
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
           {[
-            { id: 'drivers', label: 'السائقين' },
-            { id: 'staff', label: 'المرافقات' },
-            { id: 'parents', label: 'أولياء الأمور' },
-            { id: 'students', label: 'الطلاب' },
-            { id: 'managers', label: 'المدراء' },
-            { id: 'reports', label: 'التقارير' },
-            { id: 'emergencies', label: 'الطوارئ' },
+            { id: 'drivers', label: 'السائقين' }, { id: 'staff', label: 'المرافقات' }, { id: 'parents', label: 'أولياء الأمور' },
+            { id: 'students', label: 'الطلاب' }, { id: 'managers', label: 'المدراء' }, { id: 'reports', label: 'التقارير' }, { id: 'emergencies', label: 'الطوارئ' },
           ].map(tab => (
-            <TouchableOpacity 
-              key={tab.id} 
-              style={[styles.tab, activeTab === tab.id && styles.tabActive]} 
-              onPress={() => { setActiveTab(tab.id); hideAllForms(); }}
-            >
+            <TouchableOpacity key={tab.id} style={[styles.tab, activeTab === tab.id && styles.tabActive]} onPress={() => { setActiveTab(tab.id); setShowForm(false); }}>
               <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
@@ -223,34 +169,60 @@ export default function SchoolScreen({ route, navigation }) {
       </View>
 
       <View style={styles.searchWrapper}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="بحث بالاسم أو اسم المستخدم..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+        <TextInput style={styles.searchInput} placeholder="بحث بالاسم أو اسم المستخدم..." value={searchQuery} onChangeText={setSearchQuery} />
       </View>
 
-      {/* المحتوى سيتم عرضه هنا بناءً على التاب المختار */}
-      <View style={{ flex: 1, padding: 15 }}>
-        <Text style={{ textAlign: 'center', color: '#64748B' }}>
-          يتم حالياً عرض قسم: {activeTab}
-        </Text>
-        <TouchableOpacity 
-          style={styles.addBtn} 
-          onPress={() => {
-            setFormData({});
-            setEditingId(null);
-            if (activeTab === 'drivers') setShowDriverForm(true);
-            else if (activeTab === 'staff') setShowStaffForm(true);
-            else if (activeTab === 'parents') setShowParentForm(true);
-            else if (activeTab === 'students') setShowStudentForm(true);
-            else if (activeTab === 'managers') setShowManagerForm(true);
-          }}
-        >
+      <FlatList
+        data={currentData}
+        keyExtractor={item => item.id}
+        contentContainerStyle={{ padding: 15 }}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <View style={styles.cardActions}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => { setFormData(item); setEditingId(item.id); setShowForm(true); }}>
+                <Text style={styles.editBtnText}>تعديل</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteBtn} onPress={() => handleAction('delete', item)}>
+                <Text style={styles.deleteBtnText}>حذف</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ alignItems: 'flex-end', flex: 1 }}>
+              <Text style={styles.cardTitle}>{item.name}</Text>
+              <Text style={styles.cardSub}>{item.username || item.id}</Text>
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#64748B' }}>لا توجد بيانات</Text>}
+      />
+
+      {activeTab !== 'reports' && activeTab !== 'emergencies' && (
+        <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
           <Text style={styles.addBtnText}>+ إضافة جديد</Text>
         </TouchableOpacity>
-      </View>
+      )}
+
+      <Modal visible={showForm} animationType="slide">
+        <SafeAreaView style={{ flex: 1, padding: 20 }}>
+          <Text style={[styles.title, { textAlign: 'center', marginBottom: 20 }]}>{editingId ? 'تعديل بيانات' : 'إضافة جديد'}</Text>
+          <ScrollView>
+            {renderInput('الاسم الكامل', 'name')}
+            {renderInput('اسم المستخدم', 'username')}
+            {activeTab === 'drivers' && renderInput('رقم الجوال', 'phone', true)}
+            {activeTab === 'drivers' && renderInput('رقم اللوحة', 'busPlate')}
+            {activeTab === 'students' && renderInput('الصف', 'class')}
+            {activeTab === 'students' && renderInput('اسم ولي الأمر', 'parentUsername')}
+            {activeTab === 'students' && renderInput('اسم السائق', 'driverUsername')}
+          </ScrollView>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+            <TouchableOpacity style={[styles.addBtn, { flex: 0.45, backgroundColor: '#64748B' }]} onPress={() => setShowForm(false)}>
+              <Text style={styles.addBtnText}>إلغاء</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.addBtn, { flex: 0.45 }]} onPress={() => handleAction('save')}>
+              <Text style={styles.addBtnText}>حفظ</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -271,9 +243,17 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#FFF' },
   searchWrapper: { padding: 15 },
   searchInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, textAlign: 'right' },
-  addBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 20 },
+  card: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', alignItems: 'center', elevation: 2 },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
+  cardSub: { fontSize: 13, color: '#64748B' },
+  cardActions: { flexDirection: 'row' },
+  editBtn: { padding: 8, backgroundColor: '#EFF6FF', borderRadius: 8, marginRight: 8 },
+  editBtnText: { color: '#3B82F6', fontSize: 12, fontWeight: 'bold' },
+  deleteBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8, marginRight: 15 },
+  deleteBtnText: { color: '#EF4444', fontSize: 12, fontWeight: 'bold' },
+  addBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center', margin: 15 },
   addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   inputWrapper: { marginBottom: 15 },
   inputLabel: { fontSize: 14, color: '#475569', marginBottom: 5, textAlign: 'right' },
-  input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' }
+  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, textAlign: 'right' }
 });

@@ -1,9 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-// إعداد طريقة تكيّف الإشعارات عند ظهورها في الأمام
+// إعداد كيفية ظهور الإشعارات والتفاعل معها
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -12,12 +12,15 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/**
+ * تسجيل الجهاز لاستقبال الإشعارات والحصول على التوكن
+ */
 export async function registerForPushNotificationsAsync() {
   let token;
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'Default',
+      name: 'default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
@@ -35,22 +38,41 @@ export async function registerForPushNotificationsAsync() {
       console.log('Failed to get push token for push notification!');
       return null;
     }
-    
-    // في SDK الحديثة، يجب تمرير projectId
-    const projectId = 
-      Constants?.expoConfig?.extra?.eas?.projectId ?? 
-      Constants?.easConfig?.projectId;
 
+    // جلب التوكن باستخدام معرف المشروع من Constants تلقائياً
     try {
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+      if (!projectId) {
+        console.warn("Project ID not found in Constants. Make sure app.json is configured correctly.");
+      }
+      
       token = (await Notifications.getExpoPushTokenAsync({
-        projectId: projectId
+        projectId: projectId,
       })).data;
+      
+      console.log("Push Token generated successfully");
     } catch (e) {
-      console.log('Error getting push token:', e);
+      console.error("Error getting push token:", e);
+      return null;
     }
   } else {
     console.log('Must use physical device for Push Notifications');
+    return null;
   }
 
   return token;
+}
+
+/**
+ * إرسال إشعار محلي (اختبار)
+ */
+export async function sendLocalNotification(title, body) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: title,
+      body: body,
+      data: { data: 'goes here' },
+    },
+    trigger: null, // إرسال فوري
+  });
 }
