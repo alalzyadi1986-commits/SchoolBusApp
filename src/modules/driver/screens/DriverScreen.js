@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+} from 'react';
+
+import DriverMap from '../components/DriverMap';
 
 import {
   StyleSheet,
@@ -10,24 +16,16 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
-  Image,
 } from 'react-native';
 
-import MapView, { Marker } from 'react-native-maps';
-
-import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { useRoute, useNavigation } from '@react-navigation/native';
-
 import {
-  ref,
-  onValue,
-} from 'firebase/database';
-
-import { db } from '../../../firebaseConfig';
+  useRoute,
+  useNavigation,
+} from '@react-navigation/native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -36,11 +34,31 @@ import {
   getCurrentLocation,
 } from '../../../services/locationService';
 
-import { updateBusLocation } from '../../../services/busService';
+import {
+  clearUserSession,
+} from '../../../services/sessionService';
 
-import { clearUserSession } from '../../../services/sessionService';
+import {
+  subscribeToDriverStudents,
+} from '../services/driverStudentService';
 
-const LOCATION_TASK_NAME = 'background-location-task';
+import {
+  startLiveLocationTracking,
+} from '../services/driverLocationService';
+
+import {
+  startBackgroundTracking,
+  stopBackgroundTracking,
+} from '../services/driverBackgroundService';
+
+import {
+  updateBusLocation,
+} from '../../../services/busService';
+
+import StudentItem from '../components/StudentItem';
+
+const LOCATION_TASK_NAME =
+  'background-location-task';
 
 export default function DriverScreen() {
 
@@ -48,17 +66,23 @@ export default function DriverScreen() {
 
   const navigation = useNavigation();
 
-  const { schoolId, user } = route.params || {};
+  const { schoolId, user } =
+    route.params || {};
 
-  const [currentLoc, setCurrentLoc] = useState(null);
+  const [currentLoc, setCurrentLoc] =
+    useState(null);
 
-  const [students, setStudents] = useState([]);
+  const [students, setStudents] =
+    useState([]);
 
-  const [isTripActive, setIsTripActive] = useState(false);
+  const [isTripActive, setIsTripActive] =
+    useState(false);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [currentSpeed, setCurrentSpeed] =
+    useState(0);
 
   const mapRef = useRef(null);
 
@@ -74,160 +98,9 @@ export default function DriverScreen() {
 
     }
 
-    AsyncStorage.setItem(
-      'background_session',
-      JSON.stringify({ schoolId, user })
-    );
-
-    TaskManager.isTaskRegisteredAsync(
-      LOCATION_TASK_NAME
-    ).then(active => {
-
-      setIsTripActive(active);
-
-    });
-
-    const studentsRef = ref(
-      db,
-      `schools/${schoolId}/students`
-    );
-
-    const unsubscribeStudents = onValue(
-      studentsRef,
-      (snapshot) => {
-
-        const data = snapshot.val();
-
-        if (data) {
-
-          const list = Object.keys(data)
-            .map((key) => ({
-              id: key,
-              ...data[key],
-            }))
-            .filter(student => {
-
-              return (
-                (
-                  student.driverUsername === user.username ||
-                  student.driver_id === user.username
-                ) &&
-                student.status !== 'absent_today'
-              );
-
-            });
-
-          setStudents(list);
-
-        } else {
-
-          setStudents([]);
-
-        }
-
-        setLoading(false);
-
-      }
-    );
-
-    const setupLocation = async () => {
-
-      try {
-
-        await requestLocationPermission();
-
-        const initialLoc =
-          await getCurrentLocation();
-
-        if (initialLoc) {
-
-          const locObj = {
-            latitude: initialLoc.latitude,
-            longitude: initialLoc.longitude,
-          };
-
-          setCurrentLoc(locObj);
-
-          mapRef.current?.animateToRegion(
-            {
-              ...locObj,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            },
-            1000
-          );
-
-        }
-
-        watchSubscription.current =
-          await Location.watchPositionAsync(
-
-            {
-              accuracy:
-                Location.Accuracy.BestForNavigation,
-
-              timeInterval: 5000,
-
-              distanceInterval: 5,
-            },
-
-            async (location) => {
-
-              const newLoc = {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              };
-
-              setCurrentLoc(newLoc);
-
-              setCurrentSpeed(
-                Math.round(
-                  (location.coords.speed || 0) * 3.6
-                )
-              );
-
-              if (isTripActive) {
-
-                await updateBusLocation(
-                  schoolId,
-                  user.username,
-                  newLoc.latitude,
-                  newLoc.longitude,
-                  location.coords.speed || 0
-                );
-
-              }
-
-              mapRef.current?.animateCamera({
-                center: newLoc,
-                zoom: 17,
-              });
-
-            }
-
-          );
-
-      } catch (e) {
-
-        console.log(
-          'Location setup error:',
-          e
-        );
-
-        Alert.alert(
-          'خطأ',
-          'تعذر تحديد موقعك الحالي'
-        );
-
-      }
-
-    };
-
-    setupLocation();
+    initializeScreen();
 
     return () => {
-
-      unsubscribeStudents();
 
       if (watchSubscription.current) {
 
@@ -237,58 +110,144 @@ export default function DriverScreen() {
 
     };
 
-  }, [schoolId, user, isTripActive]);
+  }, []);
+
+  const initializeScreen = async () => {
+
+    try {
+
+      await AsyncStorage.setItem(
+        'background_session',
+        JSON.stringify({
+          schoolId,
+          user,
+        })
+      );
+
+      TaskManager
+        .isTaskRegisteredAsync(
+          LOCATION_TASK_NAME
+        )
+        .then(active => {
+
+          setIsTripActive(active);
+
+        });
+
+      subscribeToStudents();
+
+      await setupLocation();
+
+    } catch (error) {
+
+      console.log(error);
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
+  };
+
+  const subscribeToStudents = () => {
+
+    subscribeToDriverStudents(
+      schoolId,
+      user.username,
+      setStudents
+    );
+
+  };
+
+  const setupLocation = async () => {
+
+    try {
+
+      await requestLocationPermission();
+
+      const initialLocation =
+        await getCurrentLocation();
+
+      if (!initialLocation) return;
+
+      const locationObject = {
+        latitude:
+          initialLocation.latitude,
+
+        longitude:
+          initialLocation.longitude,
+      };
+
+      setCurrentLoc(locationObject);
+
+      mapRef.current?.animateToRegion(
+        {
+          ...locationObject,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        1000
+      );
+
+      watchSubscription.current =
+        await startLiveLocationTracking({
+
+          schoolId,
+
+          username: user.username,
+
+          onLocationChange: ({
+            location,
+            speed,
+          }) => {
+
+            setCurrentLoc(location);
+
+            setCurrentSpeed(speed);
+
+            mapRef.current?.animateCamera({
+              center: location,
+              zoom: 17,
+            });
+
+          },
+
+        });
+
+    } catch (error) {
+
+      console.log(error);
+
+      Alert.alert(
+        'خطأ',
+        'تعذر تحديد موقعك'
+      );
+
+    }
+
+  };
 
   const startTrip = async () => {
 
     try {
 
-      const { status } =
-        await Location.requestBackgroundPermissionsAsync();
-
-      if (status !== 'granted') {
-
-        Alert.alert(
-          'صلاحية مرفوضة',
-          'يجب السماح بالوصول للموقع دائماً.'
-        );
-
-        return;
-
-      }
-
-      await Location.startLocationUpdatesAsync(
-        LOCATION_TASK_NAME,
-        {
-          accuracy:
-            Location.Accuracy.BestForNavigation,
-
-          timeInterval: 5000,
-
-          distanceInterval: 5,
-
-          foregroundService: {
-            notificationTitle: 'تتبع الباص نشط 🚌',
-            notificationBody:
-              'يتم مشاركة موقعك الآن مع أولياء الأمور',
-
-            notificationColor: '#3B82F6',
-          },
-        }
+      await startBackgroundTracking(
+        LOCATION_TASK_NAME
       );
 
       setIsTripActive(true);
 
       Alert.alert(
         'تم بدء الرحلة',
-        'يتم الآن تتبع الباص مباشرة.'
+        'يتم الآن تتبع الباص مباشرة'
       );
 
-    } catch (e) {
+    } catch (error) {
 
       Alert.alert(
         'خطأ',
-        e.message || 'فشل بدء الرحلة'
+        error.message
       );
 
     }
@@ -299,7 +258,7 @@ export default function DriverScreen() {
 
     try {
 
-      await Location.stopLocationUpdatesAsync(
+      await stopBackgroundTracking(
         LOCATION_TASK_NAME
       );
 
@@ -307,14 +266,14 @@ export default function DriverScreen() {
 
       Alert.alert(
         'تم إنهاء الرحلة',
-        'تم إيقاف تتبع الباص.'
+        'تم إيقاف التتبع'
       );
 
-    } catch (e) {
+    } catch (error) {
 
       Alert.alert(
         'خطأ',
-        'حدث خطأ أثناء إيقاف الرحلة.'
+        'فشل إيقاف الرحلة'
       );
 
     }
@@ -369,18 +328,18 @@ export default function DriverScreen() {
 
   const callParent = (phone) => {
 
-    if (phone) {
-
-      Linking.openURL(`tel:${phone}`);
-
-    } else {
+    if (!phone) {
 
       Alert.alert(
         'خطأ',
         'رقم الهاتف غير متوفر'
       );
 
+      return;
+
     }
+
+    Linking.openURL(`tel:${phone}`);
 
   };
 
@@ -395,7 +354,7 @@ export default function DriverScreen() {
           color="#3B82F6"
         />
 
-        <Text style={{ marginTop: 15 }}>
+        <Text style={styles.loadingText}>
           جاري تحميل البيانات...
         </Text>
 
@@ -427,7 +386,7 @@ export default function DriverScreen() {
 
         </TouchableOpacity>
 
-        <View style={{ alignItems: 'flex-end' }}>
+        <View style={styles.headerInfo}>
 
           <Text style={styles.title}>
             لوحة السائق 🚌
@@ -460,7 +419,7 @@ export default function DriverScreen() {
             styles.tripBtn,
             isTripActive
               ? styles.stopBtn
-              : styles.startBtn
+              : styles.startBtn,
           ]}
 
           onPress={
@@ -484,51 +443,14 @@ export default function DriverScreen() {
 
       </View>
 
-      <MapView
-        ref={mapRef}
-        style={styles.map}
+      <DriverMap
+        mapRef={mapRef}
+        currentLoc={currentLoc}
+      />
 
-        region={{
-          latitude: currentLoc?.latitude || 31.9454,
-          longitude: currentLoc?.longitude || 35.9284,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-
-        showsUserLocation={true}
-
-        followsUserLocation={true}
-
-        showsMyLocationButton={true}
+      <View
+        style={styles.studentListContainer}
       >
-
-        {
-          currentLoc && (
-            <Marker
-              coordinate={currentLoc}
-              tracksViewChanges={false}
-            >
-
-              <View style={styles.busMarker}>
-
-                <Image
-                  source={{
-                    uri:
-                      'https://cdn-icons-png.flaticon.com/512/3448/3448339.png'
-                  }}
-
-                  style={styles.busImage}
-                />
-
-              </View>
-
-            </Marker>
-          )
-        }
-
-      </MapView>
-
-      <View style={styles.studentListContainer}>
 
         <Text style={styles.listTitle}>
           قائمة الطلاب ({students.length})
@@ -541,46 +463,10 @@ export default function DriverScreen() {
 
           renderItem={({ item }) => (
 
-            <View style={styles.studentItem}>
-
-              <TouchableOpacity
-                style={styles.callBtn}
-
-                onPress={() =>
-                  callParent(
-                    item.parentPhone ||
-                    item.parent_username
-                  )
-                }
-              >
-
-                <Text style={styles.callBtnText}>
-                  📞 اتصل
-                </Text>
-
-              </TouchableOpacity>
-
-              <View style={{ alignItems: 'flex-end' }}>
-
-                <Text style={styles.studentName}>
-                  {item.name}
-                </Text>
-
-                <Text style={styles.studentSub}>
-
-                  {item.class} -
-
-                  {
-                    item.status === 'present'
-                      ? ' ✅ داخل الباص'
-                      : ' ⏳ ينتظر'
-                  }
-
-                </Text>
-
-              </View>
-
-            </View>
+            <StudentItem
+              student={item}
+              onCallParent={callParent}
+            />
 
           )}
         />
@@ -613,20 +499,20 @@ TaskManager.defineTask(
             'background_session'
           );
 
-        if (session) {
+        if (!session) return;
 
-          const { schoolId, user } =
-            JSON.parse(session);
+        const {
+          schoolId,
+          user,
+        } = JSON.parse(session);
 
-          await updateBusLocation(
-            schoolId,
-            user.username,
-            location.coords.latitude,
-            location.coords.longitude,
-            location.coords.speed || 0
-          );
-
-        }
+        await updateBusLocation(
+          schoolId,
+          user.username,
+          location.coords.latitude,
+          location.coords.longitude,
+          location.coords.speed || 0
+        );
 
       } catch (e) {
 
@@ -655,6 +541,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  loadingText: {
+    marginTop: 15,
+  },
+
   header: {
     padding: 15,
     backgroundColor: '#FFF',
@@ -663,6 +553,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+  },
+
+  headerInfo: {
+    alignItems: 'flex-end',
   },
 
   title: {
@@ -738,26 +632,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  map: {
-    height: 260,
-    width: '100%',
-  },
-
-  busMarker: {
-    backgroundColor: '#FFF',
-    padding: 6,
-    borderRadius: 50,
-    elevation: 5,
-    borderWidth: 2,
-    borderColor: '#3B82F6',
-  },
-
-  busImage: {
-    width: 40,
-    height: 40,
-    resizeMode: 'contain',
-  },
-
   studentListContainer: {
     flex: 1,
     padding: 15,
@@ -768,39 +642,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
     textAlign: 'right',
-  },
-
-  studentItem: {
-    backgroundColor: '#FFF',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    elevation: 1,
-  },
-
-  studentName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-
-  studentSub: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-
-  callBtn: {
-    backgroundColor: '#3B82F6',
-    padding: 8,
-    borderRadius: 8,
-  },
-
-  callBtnText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
 
 });
