@@ -5,7 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from './src/screens/LoginScreen';
 import SuperAdminScreen from './src/screens/SuperAdminScreen';
 import SchoolScreen from './src/screens/SchoolScreen';
-import DriverScreen from './src/screens/DriverScreen';
+import DriverScreen from './src/modules/driver/screens/DriverScreen';
 import StaffScreen from './src/screens/StaffScreen';
 import ParentScreen from './src/screens/ParentScreen';
 

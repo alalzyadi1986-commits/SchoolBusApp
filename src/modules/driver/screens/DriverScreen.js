@@ -27,18 +27,18 @@ import {
   update,
 } from 'firebase/database';
 
-import { db } from '../firebaseConfig';
+import { db } from '../../../firebaseConfig';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   requestLocationPermission,
   getCurrentLocation,
-} from '../services/locationService';
+} from '../../../services/locationService';
 
-import { updateBusLocation } from '../services/busService';
+import { updateBusLocation } from '../../../services/busService';
 
-import { clearUserSession } from '../services/sessionService';
+import { clearUserSession } from '../../../services/sessionService';
 
 const { width } = Dimensions.get('window');
 
