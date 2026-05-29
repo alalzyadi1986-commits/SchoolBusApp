@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from '@react-navigation/native';
+
+// تحديث المسارات للمسارات الجديدة
 import { loginUser } from '../services/authService';
-import { saveUserSession, getUserSession } from '../services/sessionService';
-import { registerForPushNotificationsAsync } from '../utils/notifications';
+import { saveUserSession, getUserSession } from '../../../services/sessionService';
+import { registerForPushNotificationsAsync } from '../../../utils/notifications';
 
 const { height } = Dimensions.get('window');
 

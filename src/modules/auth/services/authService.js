@@ -1,16 +1,14 @@
 import { ref, get } from "firebase/database";
-import { db } from "../firebaseConfig";
+import { db } from "../../../firebaseConfig";
 
 /**
- * تسجيل الدخول الذكي عبر البحث في userIndex
- * @param {string} username اسم المستخدم
- * @param {string} password كلمة المرور
+ * خدمة المصادقة المركزية
  */
 export const loginUser = async (username, password) => {
   try {
     const safeKey = username.trim().replace(/\./g, ',');
     
-    // 1. التحقق من Super Admin أولاً
+    // 1. التحقق من Super Admin
     const superAdminSnap = await get(ref(db, 'admin_settings/super_admin'));
     const superAdminData = superAdminSnap.val();
     
@@ -18,19 +16,15 @@ export const loginUser = async (username, password) => {
       return { username: 'superadmin', role: 'superadmin', name: 'المدير العام' };
     }
 
-    // 2. البحث عن المستخدم في userIndex لمعرفة المدرسة والدور
+    // 2. البحث في فهرس المستخدمين
     const indexSnap = await get(ref(db, `userIndex/${safeKey}`));
     const indexData = indexSnap.val();
 
-    if (!indexData) {
-      console.log("User not found in index");
-      return null;
-    }
+    if (!indexData) return null;
 
     const { schoolId, role } = indexData;
 
-    // 3. جلب بيانات المستخدم الكاملة من مسار المدرسة الصحيح
-    // ملاحظة: قمت بتصحيح المسارات لضمان التوافق (مثلاً staff بدلاً من staffs)
+    // 3. جلب البيانات من المسار المناسب
     let userPath = `schools/${schoolId}/${role}s/${safeKey}`;
     
     if (role === 'school') userPath = `users/${safeKey}`;
@@ -49,7 +43,7 @@ export const loginUser = async (username, password) => {
 
     return null;
   } catch (error) {
-    console.error("Login service error:", error);
+    console.error("Auth Service Error:", error);
     throw error;
   }
 };

@@ -12,10 +12,16 @@ import {
   StatusBar,
   Modal,
 } from 'react-native';
-import { db } from '../firebaseConfig';
-import { ref, set, push, onValue, remove, update } from 'firebase/database';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { clearUserSession } from '../services/sessionService';
+
+// استيراد الخدمات والمسارات الجديدة
+import { clearUserSession } from '../../../services/sessionService';
+import { 
+  subscribeToSchoolData, 
+  subscribeToSchoolInfo, 
+  saveSchoolItem, 
+  deleteSchoolItem 
+} from '../services/schoolDataService';
 
 export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
@@ -45,8 +51,7 @@ export default function SchoolScreen({ route, navigation }) {
       return;
     }
 
-    const schoolUnsub = onValue(ref(db, `schools/${schoolId}`), (snap) => {
-      const data = snap.val();
+    const schoolUnsub = subscribeToSchoolInfo(schoolId, (data) => {
       if (data) {
         setDynamicSchoolName(data.name || '');
         setExpiryDate(data.endDate || '');
@@ -54,21 +59,14 @@ export default function SchoolScreen({ route, navigation }) {
       }
     });
 
-    const fetchData = (path, setter) => {
-      return onValue(ref(db, `schools/${schoolId}/${path}`), (snap) => {
-        const data = snap.val();
-        setter(data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : []);
-      });
-    };
-
     const unsubs = [
-      fetchData('drivers', setDrivers),
-      fetchData('staff', setStaff),
-      fetchData('parents', setParents),
-      fetchData('students', setStudents),
-      fetchData('emergencies', setEmergencies),
-      fetchData('reports', setReports),
-      fetchData('managers', setManagers)
+      subscribeToSchoolData(schoolId, 'drivers', setDrivers),
+      subscribeToSchoolData(schoolId, 'staff', setStaff),
+      subscribeToSchoolData(schoolId, 'parents', setParents),
+      subscribeToSchoolData(schoolId, 'students', setStudents),
+      subscribeToSchoolData(schoolId, 'emergencies', setEmergencies),
+      subscribeToSchoolData(schoolId, 'reports', setReports),
+      subscribeToSchoolData(schoolId, 'managers', setManagers)
     ];
 
     setLoading(false);
@@ -84,27 +82,24 @@ export default function SchoolScreen({ route, navigation }) {
       return;
     }
 
-    const path = `schools/${schoolId}/${activeTab}`;
-
     if (action === 'delete' && item) {
       Alert.alert('حذف', 'هل أنت متأكد؟', [
         { text: 'إلغاء', style: 'cancel' },
-        { text: 'حذف', style: 'destructive', onPress: () => remove(ref(db, `${path}/${item.id}`)) },
+        { text: 'حذف', style: 'destructive', onPress: async () => {
+          try {
+            await deleteSchoolItem(schoolId, activeTab, item.id);
+          } catch (e) {
+            Alert.alert('خطأ', 'فشل الحذف');
+          }
+        }},
       ]);
     } else if (action === 'save') {
-      const safeUsername = formData.username?.replace(/\./g, ',');
-      if (!safeUsername || !formData.name) {
+      if (!formData.username || !formData.name) {
         Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية (الاسم واسم المستخدم)');
         return;
       }
       try {
-        if (editingId) {
-          await update(ref(db, `${path}/${editingId}`), formData);
-        } else {
-          await set(ref(db, `${path}/${safeUsername}`), { ...formData, id: safeUsername });
-          const roleMap = { 'drivers': 'driver', 'staff': 'staff', 'parents': 'parent', 'students': 'student', 'managers': 'manager' };
-          await set(ref(db, `userIndex/${safeUsername}`), { schoolId, role: roleMap[activeTab] || activeTab });
-        }
+        await saveSchoolItem(schoolId, activeTab, editingId, formData);
         setFormData({});
         setEditingId(null);
         setShowForm(false);
@@ -125,7 +120,10 @@ export default function SchoolScreen({ route, navigation }) {
   const currentData = useMemo(() => {
     const map = { drivers, staff, parents, students, managers, reports, emergencies };
     const list = map[activeTab] || [];
-    return list.filter(item => item.name?.includes(searchQuery) || item.username?.includes(searchQuery));
+    return list.filter(item => 
+      item.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      item.username?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   }, [activeTab, drivers, staff, parents, students, managers, reports, emergencies, searchQuery]);
 
   const renderInput = (placeholder, field, isNumeric = false) => (
