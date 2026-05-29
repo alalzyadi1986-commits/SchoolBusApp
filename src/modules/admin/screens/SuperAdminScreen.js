@@ -10,11 +10,12 @@ import {
   ActivityIndicator,
   ScrollView,
   StatusBar,
-  Modal
+  Modal,
+  Image
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db } from '../../../firebaseConfig';
+import { db, storage } from '../../../firebaseConfig';
 import {
   ref,
   set,
@@ -23,13 +24,18 @@ import {
   update,
   get
 } from 'firebase/database';
+import { ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function SuperAdminScreen({ navigation }) {
 
   const [schools, setSchools] = useState([]);
+  const [filteredSchools, setFilteredSchools] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const [schoolName, setSchoolName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -39,297 +45,205 @@ export default function SuperAdminScreen({ navigation }) {
   const [adminPassword, setAdminPassword] = useState('');
 
   const [startDate, setStartDate] = useState(new Date());
-
   const [endDate, setEndDate] = useState(
-    new Date(
-      new Date().setFullYear(
-        new Date().getFullYear() + 1
-      )
-    )
+    new Date(new Date().setFullYear(new Date().getFullYear() + 1))
   );
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-
   const [loading, setLoading] = useState(false);
-
   const [editingSchoolId, setEditingSchoolId] = useState(null);
 
   const [showPassModal, setShowPassModal] = useState(false);
   const [newAdminPass, setNewAdminPass] = useState('');
 
+  // ميزة الرسائل
+  const [showMsgModal, setShowMsgModal] = useState(false);
+  const [msgTarget, setMsgTarget] = useState(null); // null for all, or school object
+  const [msgContent, setMsgContent] = useState('');
+
   useEffect(() => {
-
     const schoolsRef = ref(db, 'schools');
-
-    const unsubscribe = onValue(
-      schoolsRef,
-      (snapshot) => {
-
-        const data = snapshot.val();
-
-        if (data) {
-
-          const list = Object.keys(data).map((key) => ({
-            id: key,
-            ...data[key]
-          }));
-
-          setSchools(list);
-
-        } else {
-
-          setSchools([]);
-
-        }
+    const unsubscribe = onValue(schoolsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.keys(data).map((key) => ({
+          id: key,
+          ...data[key]
+        }));
+        setSchools(list);
+        setFilteredSchools(list);
+      } else {
+        setSchools([]);
+        setFilteredSchools([]);
       }
-    );
-
+    });
     return () => unsubscribe();
-
   }, []);
 
+  // نظام البحث الذكي
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredSchools(schools);
+    } else {
+      const lowerQuery = searchQuery.toLowerCase();
+      const filtered = schools.filter(school => 
+        (school.name && school.name.toLowerCase().includes(lowerQuery)) ||
+        (school.displayName && school.displayName.toLowerCase().includes(lowerQuery)) ||
+        (school.email && school.email.toLowerCase().includes(lowerQuery))
+      );
+      setFilteredSchools(filtered);
+    }
+  }, [searchQuery, schools]);
+
   const formatDate = (date) => {
-
     if (!date) return '';
-
     const d = new Date(date);
-
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-
   };
 
   const checkSubscriptionStatus = (end) => {
-
-    if (!end) {
-      return {
-        text: 'غير محدد',
-        color: '#94A3B8'
-      };
-    }
-
+    if (!end) return { text: 'غير محدد', color: '#94A3B8' };
     const today = new Date();
     const expiry = new Date(end);
-
-    return expiry > today
-      ? {
-          text: 'نشط ✅',
-          color: '#10B981'
-        }
-      : {
-          text: 'منتهي ❌',
-          color: '#EF4444'
-        };
-
+    return expiry > today ? { text: 'نشط ✅', color: '#10B981' } : { text: 'منتهي ❌', color: '#EF4444' };
   };
 
   const getPlanLimits = (type) => {
     switch (type) {
       case '1':
-        return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى' };
+        return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى (3 باصات)' };
       case '2':
-        return { maxBuses: 10, maxStudents: 200, label: 'الباقة المتوسطة' };
+        return { maxBuses: 7, maxStudents: 200, label: 'الباقة المتوسطة (7 باصات)' };
       case '3':
-        return { maxBuses: 100, maxStudents: 2000, label: 'الباقة المفتوحة' };
+        return { maxBuses: 1000, maxStudents: 10000, label: 'الباقة المفتوحة' };
       default:
         return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى' };
     }
   };
 
-  const generateSchoolId = async () => {
-
-    const snapshot = await get(ref(db, 'schools'));
-
-    const data = snapshot.val();
-
-    if (!data) {
-      return 'school_001';
-    }
-
-    const ids = Object.keys(data)
-      .filter(id => id.startsWith('school_'));
-
-    if (ids.length === 0) {
-      return 'school_001';
-    }
-
-    const numbers = ids.map(id => {
-      const parts = id.split('_');
-      return parseInt(parts[1]) || 0;
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
     });
 
-    const maxNumber = Math.max(...numbers);
+    if (!result.canceled) {
+      uploadImage(result.assets[0].uri);
+    }
+  };
 
-    const nextNumber = maxNumber + 1;
+  const uploadImage = async (uri) => {
+    setLoading(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const filename = `logos/${Date.now()}.jpg`;
+      const storageRef = sRef(storage, filename);
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
+      setLogoUrl(url);
+    } catch (e) {
+      Alert.alert('خطأ في الرفع', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return `school_${String(nextNumber).padStart(3, '0')}`;
-
+  const generateSchoolId = async () => {
+    const snapshot = await get(ref(db, 'schools'));
+    const data = snapshot.val();
+    if (!data) return 'school_001';
+    const ids = Object.keys(data).filter(id => id.startsWith('school_'));
+    if (ids.length === 0) return 'school_001';
+    const numbers = ids.map(id => parseInt(id.split('_')[1]) || 0);
+    return `school_${String(Math.max(...numbers) + 1).padStart(3, '0')}`;
   };
 
   const handleSaveSchool = async () => {
-
-    if (
-      !schoolName ||
-      !displayName ||
-      !adminEmail ||
-      !adminPassword
-    ) {
-
-      Alert.alert(
-        'خطأ',
-        'يرجى تعبئة الحقول الأساسية (اسم النظام، اسم العرض، البريد، كلمة المرور)'
-      );
-
+    if (!schoolName || !displayName || !adminEmail || !adminPassword) {
+      Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية');
       return;
     }
-
     setLoading(true);
-
     try {
       const limits = getPlanLimits(planType);
-
       const schoolData = {
         name: schoolName,
-        displayName: displayName,
-        logoUrl: logoUrl,
-        googleMapsLink: googleMapsLink,
-        planType: planType,
-        limits: limits,
+        displayName,
+        logoUrl,
+        googleMapsLink,
+        planType,
+        limits,
         email: adminEmail,
         password: adminPassword,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         role: 'school',
       };
-
-      const safeUserKey = adminEmail
-        .replace(/\./g, ',');
+      const safeUserKey = adminEmail.replace(/\./g, ',');
 
       if (editingSchoolId) {
-
-        await update(
-          ref(db, `schools/${editingSchoolId}`),
-          schoolData
-        );
-
-        await update(
-          ref(db, `users/${safeUserKey}`),
-          {
-            ...schoolData,
-            schoolId: editingSchoolId,
-            username: adminEmail,
-          }
-        );
-
-        await update(
-          ref(db, `userIndex/${safeUserKey}`),
-          {
-            schoolId: editingSchoolId,
-            role: 'school',
-          }
-        );
-
-        Alert.alert(
-          'نجاح',
-          'تم تحديث بيانات المدرسة بنجاح'
-        );
-
-        setEditingSchoolId(null);
-
+        await update(ref(db, `schools/${editingSchoolId}`), schoolData);
+        await update(ref(db, `users/${safeUserKey}`), { ...schoolData, schoolId: editingSchoolId, username: adminEmail });
+        await update(ref(db, `userIndex/${safeUserKey}`), { schoolId: editingSchoolId, role: 'school' });
+        Alert.alert('نجاح', 'تم التحديث بنجاح');
       } else {
-
-        const newSchoolId =
-          await generateSchoolId();
-
-        await set(
-          ref(db, `schools/${newSchoolId}`),
-          schoolData
-        );
-
-        const branches = [
-          'drivers',
-          'students',
-          'parents',
-          'staff',
-          'bus',
-          'tracking',
-          'managers',
-          'emergencies',
-          'reports'
-        ];
-
+        const newSchoolId = await generateSchoolId();
+        await set(ref(db, `schools/${newSchoolId}`), schoolData);
+        const branches = ['drivers', 'students', 'parents', 'staff', 'bus', 'tracking', 'managers', 'emergencies', 'reports', 'messages'];
         for (const branch of branches) {
-          await set(
-            ref(
-              db,
-              `schools/${newSchoolId}/${branch}`
-            ),
-            {
-              _init: true
-            }
-          );
+          await set(ref(db, `schools/${newSchoolId}/${branch}`), { _init: true });
         }
-
-        await set(
-          ref(db, `users/${safeUserKey}`),
-          {
-            ...schoolData,
-            schoolId: newSchoolId,
-            username: adminEmail,
-          }
-        );
-
-        await set(
-          ref(db, `userIndex/${safeUserKey}`),
-          {
-            schoolId: newSchoolId,
-            role: 'school',
-          }
-        );
-
-        Alert.alert(
-          'نجاح',
-          'تم إضافة المدرسة بنجاح'
-        );
-
+        await set(ref(db, `users/${safeUserKey}`), { ...schoolData, schoolId: newSchoolId, username: adminEmail });
+        await set(ref(db, `userIndex/${safeUserKey}`), { schoolId: newSchoolId, role: 'school' });
+        Alert.alert('نجاح', 'تمت الإضافة بنجاح');
       }
-
       resetForm();
-
     } catch (error) {
-
-      Alert.alert(
-        'خطأ',
-        'حدث خطأ أثناء حفظ البيانات: ' +
-          error.message
-      );
-
+      Alert.alert('خطأ', error.message);
     } finally {
-
       setLoading(false);
+    }
+  };
 
+  const handleSendMessage = async () => {
+    if (!msgContent.trim()) return;
+    setLoading(true);
+    try {
+      const msgData = {
+        id: Date.now(),
+        sender: 'Super Admin',
+        content: msgContent,
+        timestamp: new Date().toISOString(),
+        type: 'admin_broadcast'
+      };
+
+      if (msgTarget) {
+        // رسالة لمدرسة محددة
+        await set(ref(db, `schools/${msgTarget.id}/messages/${msgData.id}`), msgData);
+      } else {
+        // رسالة لجميع المدارس
+        for (const school of schools) {
+          await set(ref(db, `schools/${school.id}/messages/${msgData.id}`), msgData);
+        }
+      }
+      Alert.alert('نجاح', 'تم إرسال الرسالة');
+      setShowMsgModal(false);
+      setMsgContent('');
+    } catch (e) {
+      Alert.alert('خطأ', e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const resetForm = () => {
-    setSchoolName('');
-    setDisplayName('');
-    setLogoUrl('');
-    setGoogleMapsLink('');
-    setPlanType('1');
-    setAdminEmail('');
-    setAdminPassword('');
-
-    setStartDate(new Date());
-
-    setEndDate(
-      new Date(
-        new Date().setFullYear(
-          new Date().getFullYear() + 1
-        )
-      )
-    );
-
+    setSchoolName(''); setDisplayName(''); setLogoUrl(''); setGoogleMapsLink('');
+    setPlanType('1'); setAdminEmail(''); setAdminPassword('');
+    setStartDate(new Date()); setEndDate(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
     setEditingSchoolId(null);
   };
 
@@ -342,377 +256,164 @@ export default function SuperAdminScreen({ navigation }) {
     setPlanType(school.planType || '1');
     setAdminEmail(school.email);
     setAdminPassword(school.password);
+    if (school.startDate) setStartDate(new Date(school.startDate));
+    if (school.endDate) setEndDate(new Date(school.endDate));
+  };
 
-    if (school.startDate) {
-      setStartDate(
-        new Date(school.startDate)
-      );
-    }
-
-    if (school.endDate) {
-      setEndDate(
-        new Date(school.endDate)
-      );
-    }
+  const renderSchoolItem = ({ item }) => {
+    const status = checkSubscriptionStatus(item.endDate);
+    const limits = getPlanLimits(item.planType);
+    return (
+      <View style={styles.schoolCard}>
+        <View style={styles.cardHeader}>
+          {item.logoUrl ? (
+            <Image source={{ uri: item.logoUrl }} style={styles.cardLogo} />
+          ) : (
+            <View style={styles.logoPlaceholder}><Text>🏫</Text></View>
+          )}
+          <View style={{ flex: 1, marginRight: 10 }}>
+            <Text style={styles.schoolName}>{item.displayName || item.name}</Text>
+            <Text style={styles.schoolEmail}>{item.email}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
+            <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+          </View>
+        </View>
+        <View style={styles.cardDetails}>
+          <Text style={styles.detailText}>📦 {limits.label}</Text>
+          <Text style={styles.detailText}>📅 ينتهي: {formatDate(item.endDate)}</Text>
+        </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => handleEditPress(item)}>
+            <Text style={styles.actionText}>تعديل ✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F0F9FF' }]} onPress={() => { setMsgTarget(item); setShowMsgModal(true); }}>
+            <Text style={[styles.actionText, { color: '#0EA5E9' }]}>رسالة ✉️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => handleDeleteSchool(item.id)}>
+            <Text style={[styles.actionText, { color: '#EF4444' }]}>حذف 🗑️</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const handleDeleteSchool = (id) => {
-
-    Alert.alert(
-      'تأكيد الحذف',
-      'هل أنت متأكد من رغبتك في حذف هذه المدرسة نهائياً؟',
-      [
-        {
-          text: 'إلغاء',
-          style: 'cancel'
-        },
-
-        {
-          text: 'حذف',
-          style: 'destructive',
-
-          onPress: async () => {
-
-            setLoading(true);
-
-            try {
-
-              const schoolToDelete =
-                schools.find(
-                  s => s.id === id
-                );
-
-              await remove(
-                ref(db, `schools/${id}`)
-              );
-
-              if (
-                schoolToDelete &&
-                schoolToDelete.email
-              ) {
-
-                const safeUserKey =
-                  schoolToDelete.email
-                    .replace(/\./g, ',');
-
-                await remove(
-                  ref(
-                    db,
-                    `users/${safeUserKey}`
-                  )
-                );
-
-                await remove(
-                  ref(
-                    db,
-                    `userIndex/${safeUserKey}`
-                  )
-                );
-
-              }
-
-              Alert.alert(
-                'نجاح',
-                'تم حذف المدرسة بنجاح'
-              );
-
-            } catch (error) {
-
-              Alert.alert(
-                'خطأ',
-                'حدث خطأ أثناء حذف المدرسة: ' +
-                  error.message
-              );
-
-            } finally {
-
-              setLoading(false);
-
-            }
-          },
-        },
-      ]
-    );
+    Alert.alert('تأكيد الحذف', 'حذف هذه المدرسة نهائياً؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حذف', style: 'destructive', onPress: async () => {
+        setLoading(true);
+        try {
+          const schoolToDelete = schools.find(s => s.id === id);
+          await remove(ref(db, `schools/${id}`));
+          if (schoolToDelete?.email) {
+            const safeKey = schoolToDelete.email.replace(/\./g, ',');
+            await remove(ref(db, `users/${safeKey}`));
+            await remove(ref(db, `userIndex/${safeKey}`));
+          }
+          Alert.alert('نجاح', 'تم الحذف');
+        } catch (e) { Alert.alert('خطأ', e.message); }
+        finally { setLoading(false); }
+      }}
+    ]);
   };
-
-  const handleUpdateSuperAdminPassword = async () => {
-
-    if (!newAdminPass) {
-
-      Alert.alert(
-        'خطأ',
-        'الرجاء إدخال كلمة المرور الجديدة.'
-      );
-
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-
-      await update(
-        ref(db, 'admin_settings/super_admin'),
-        {
-          password: newAdminPass
-        }
-      );
-
-      Alert.alert(
-        'نجاح',
-        'تم تحديث كلمة مرور المدير العام بنجاح.'
-      );
-
-      setShowPassModal(false);
-      setNewAdminPass('');
-
-    } catch (error) {
-
-      Alert.alert(
-        'خطأ',
-        'حدث خطأ أثناء تحديث كلمة المرور: ' +
-          error.message
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-  };
-
-  const handleLogout = async () => {
-
-    await AsyncStorage.removeItem(
-      'user_session'
-    );
-
-    navigation.replace('Login');
-
-  };
-
-  if (loading) {
-
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator
-          size="large"
-          color="#007BFF"
-        />
-
-        <Text style={{ marginTop: 10 }}>
-          جاري تحميل البيانات...
-        </Text>
-      </View>
-    );
-  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFF"
-      />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
+            <Text style={styles.logoutText}>خروج</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>خروج</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>لوحة المدير العام 👑</Text>
-        <TouchableOpacity style={styles.passBtn} onPress={() => setShowPassModal(true)}>
-          <Text style={styles.passBtnText}>🔐</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.formCard}>
-          <Text style={styles.cardTitle}>
-            {editingSchoolId ? 'تعديل بيانات المدرسة' : 'إضافة مدرسة جديدة'}
-          </Text>
+          <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
+          
+          <View style={styles.logoSection}>
+            <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
+              {logoUrl ? (
+                <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
+              ) : (
+                <View style={styles.uploadPlaceholder}>
+                  <Text style={{ fontSize: 30 }}>📸</Text>
+                  <Text style={styles.uploadText}>رفع الشعار</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
 
-          <Text style={styles.inputLabel}>اسم المدرسة (للنظام)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="مثال: alrajeh_school"
-            value={schoolName}
-            onChangeText={setSchoolName}
-            textAlign="right"
-            autoCapitalize="none"
-          />
+          <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
+          <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
+          <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
+          <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
+          <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
 
-          <Text style={styles.inputLabel}>اسم العرض (يظهر للجميع)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="مثال: مدارس الراجح النموذجية"
-            value={displayName}
-            onChangeText={setDisplayName}
-            textAlign="right"
-          />
-
-          <Text style={styles.inputLabel}>رابط شعار المدرسة (URL)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="https://example.com/logo.png"
-            value={logoUrl}
-            onChangeText={setLogoUrl}
-            textAlign="right"
-            autoCapitalize="none"
-          />
-
-          <Text style={styles.inputLabel}>رابط تقييم جوجل مابس</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="https://maps.app.goo.gl/..."
-            value={googleMapsLink}
-            onChangeText={setGoogleMapsLink}
-            textAlign="right"
-            autoCapitalize="none"
-          />
-
-          <Text style={styles.inputLabel}>نوع باقة الاشتراك</Text>
+          <Text style={styles.label}>اختر باقة الاشتراك:</Text>
           <View style={styles.planContainer}>
             {[
-              { id: '1', label: 'باقة 1 (3 باصات)' },
-              { id: '2', label: 'باقة 2 (10 باصات)' },
-              { id: '3', label: 'باقة 3 (مفتوحة)' }
-            ].map((plan) => (
-              <TouchableOpacity
-                key={plan.id}
-                style={[styles.planOption, planType === plan.id && styles.planOptionActive]}
-                onPress={() => setPlanType(plan.id)}
-              >
-                <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>
-                  {plan.label}
-                </Text>
+              { id: '1', name: 'صغيرة (3)' },
+              { id: '2', name: 'متوسطة (7)' },
+              { id: '3', name: 'مفتوحة' }
+            ].map(plan => (
+              <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
+                <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.inputLabel}>البريد الإلكتروني (اسم المستخدم)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="admin@school.com"
-            value={adminEmail}
-            onChangeText={setAdminEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            textAlign="right"
-            editable={!editingSchoolId}
-          />
-
-          <Text style={styles.inputLabel}>كلمة المرور</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="كلمة المرور"
-            value={adminPassword}
-            onChangeText={setAdminPassword}
-            secureTextEntry
-            textAlign="right"
-          />
-
-          <View style={styles.dateRow}>
-            <TouchableOpacity style={styles.dateBtn} onPress={() => setShowStartPicker(true)}>
-              <Text style={styles.dateBtnText}>بداية الاشتراك: {formatDate(startDate)}</Text>
-            </TouchableOpacity>
-            {showStartPicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display="default"
-                onChange={(event, date) => {
-                  setShowStartPicker(false);
-                  if (date) setStartDate(date);
-                }}
-              />
-            )}
-          </View>
-
-          <View style={styles.dateRow}>
-            <TouchableOpacity style={styles.dateBtn} onPress={() => setShowEndPicker(true)}>
-              <Text style={styles.dateBtnText}>نهاية الاشتراك: {formatDate(endDate)}</Text>
-            </TouchableOpacity>
-            {showEndPicker && (
-              <DateTimePicker
-                value={endDate}
-                mode="date"
-                display="default"
-                onChange={(event, date) => {
-                  setShowEndPicker(false);
-                  if (date) setEndDate(date);
-                }}
-              />
-            )}
-          </View>
-
-          <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool}>
-              <Text style={styles.saveBtnText}>
-                {editingSchoolId ? 'تحديث البيانات' : 'إضافة المدرسة'}
-              </Text>
-            </TouchableOpacity>
-
-            {editingSchoolId && (
-              <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>
-                <Text style={styles.cancelBtnText}>إلغاء</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
+            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
+          </TouchableOpacity>
+          {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
         </View>
 
         <View style={styles.listSection}>
-          <Text style={styles.sectionTitle}>المدارس المسجلة ({schools.length})</Text>
-          {schools.map((item) => {
-            const status = checkSubscriptionStatus(item.endDate);
-            const limits = getPlanLimits(item.planType);
-            return (
-              <View key={item.id} style={styles.schoolCard}>
-                <View style={styles.schoolHeader}>
-                  <Text style={styles.schoolName}>{item.displayName || item.name}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.planBadge}>
-                  <Text style={styles.planBadgeText}>{limits.label}</Text>
-                </View>
+          <View style={styles.listHeader}>
+            <Text style={styles.listTitle}>المدارس المسجلة ({filteredSchools.length})</Text>
+            <TouchableOpacity style={styles.broadcastBtn} onPress={() => { setMsgTarget(null); setShowMsgModal(true); }}>
+              <Text style={styles.broadcastText}>رسالة للجميع 📢</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <TextInput 
+            style={styles.searchInput} 
+            placeholder="بحث ذكي (اسم، بريد، عرض)..." 
+            value={searchQuery} 
+            onChangeText={setSearchQuery} 
+          />
 
-                <Text style={styles.schoolInfo}>📧 {item.email}</Text>
-                <Text style={styles.schoolInfo}>📅 ينتهي في: {formatDate(item.endDate)}</Text>
-                <Text style={styles.schoolInfo}>🚌 الحد الأقصى للباصات: {limits.maxBuses}</Text>
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => handleEditPress(item)}>
-                    <Text style={styles.editBtnText}>تعديل</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteSchool(item.id)}>
-                    <Text style={styles.deleteBtnText}>حذف</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
+          <FlatList
+            data={filteredSchools}
+            keyExtractor={item => item.id}
+            renderItem={renderSchoolItem}
+            scrollEnabled={false}
+            ListEmptyComponent={<Text style={styles.emptyText}>لا توجد مدارس مطابقة للبحث</Text>}
+          />
         </View>
       </ScrollView>
 
-      <Modal visible={showPassModal} transparent animationType="fade">
+      {/* مودال الرسائل */}
+      <Modal visible={showMsgModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>تحديث كلمة مرور المدير العام</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="كلمة المرور الجديدة"
-              value={newAdminPass}
-              onChangeText={setNewAdminPass}
-              secureTextEntry
-              textAlign="right"
+            <Text style={styles.modalTitle}>{msgTarget ? `رسالة إلى: ${msgTarget.displayName}` : 'رسالة عامة لجميع المدارس'}</Text>
+            <TextInput 
+              style={styles.msgInput} 
+              placeholder="اكتب رسالتك هنا..." 
+              multiline 
+              numberOfLines={4} 
+              value={msgContent} 
+              onChangeText={setMsgContent} 
             />
             <View style={styles.modalBtns}>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleUpdateSuperAdminPassword}>
-                <Text style={styles.modalSaveBtnText}>تحديث</Text>
+              <TouchableOpacity style={[styles.modalBtn, styles.sendBtn]} onPress={handleSendMessage}>
+                <Text style={styles.modalBtnText}>إرسال الآن</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowPassModal(false)}>
-                <Text style={styles.modalCancelBtnText}>إلغاء</Text>
+              <TouchableOpacity style={[styles.modalBtn, styles.closeBtn]} onPress={() => setShowMsgModal(false)}>
+                <Text style={styles.modalBtnText}>إغلاق</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -723,53 +424,55 @@ export default function SuperAdminScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: { padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1E293B' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
-  logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
-  passBtn: { padding: 8, backgroundColor: '#F1F5F9', borderRadius: 8 },
-  passBtnText: { fontSize: 16 },
-  scrollContent: { padding: 15 },
-  formCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 15, elevation: 2, marginBottom: 20 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginBottom: 15, textAlign: 'right' },
-  inputLabel: { fontSize: 13, color: '#64748B', marginBottom: 5, textAlign: 'right', fontWeight: '600' },
-  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 14 },
+  logoutText: { color: '#EF4444', fontWeight: 'bold' },
+  formCard: { margin: 20, padding: 20, backgroundColor: '#FFF', borderRadius: 20, elevation: 4 },
+  formTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
+  logoSection: { alignItems: 'center', marginBottom: 20 },
+  logoUpload: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
+  uploadedLogo: { width: 100, height: 100, borderRadius: 50 },
+  uploadPlaceholder: { alignItems: 'center' },
+  uploadText: { fontSize: 10, color: '#64748B', marginTop: 5 },
+  input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 10, marginBottom: 10, textAlign: 'right' },
+  label: { fontSize: 14, fontWeight: 'bold', marginBottom: 10, textAlign: 'right' },
   planContainer: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 20 },
-  planOption: { flex: 1, paddingVertical: 10, backgroundColor: '#F1F5F9', borderRadius: 8, marginHorizontal: 4, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-  planOptionActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  planText: { fontSize: 11, color: '#64748B', fontWeight: 'bold' },
-  planTextActive: { color: '#FFF' },
-  dateRow: { marginBottom: 10 },
-  dateBtn: { backgroundColor: '#EFF6FF', padding: 12, borderRadius: 10, alignItems: 'flex-end' },
-  dateBtnText: { color: '#3B82F6', fontWeight: '600' },
-  btnRow: { flexDirection: 'row-reverse', marginTop: 10 },
-  saveBtn: { flex: 1, backgroundColor: '#3B82F6', padding: 15, borderRadius: 10, alignItems: 'center' },
-  saveBtnText: { color: '#FFF', fontWeight: 'bold' },
-  cancelBtn: { width: 80, backgroundColor: '#94A3B8', padding: 15, borderRadius: 10, alignItems: 'center', marginRight: 10 },
-  cancelBtnText: { color: '#FFF', fontWeight: 'bold' },
-  listSection: { marginTop: 10 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginBottom: 15, textAlign: 'right' },
-  schoolCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 12, elevation: 1 },
-  schoolHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  schoolName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: 'bold' },
-  planBadge: { alignSelf: 'flex-end', backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#B9E6FE' },
-  planBadgeText: { color: '#0284C7', fontSize: 11, fontWeight: 'bold' },
-  schoolInfo: { fontSize: 13, color: '#64748B', marginBottom: 5, textAlign: 'right' },
-  actionRow: { flexDirection: 'row', marginTop: 10 },
-  editBtn: { paddingVertical: 8, paddingHorizontal: 20, backgroundColor: '#EFF6FF', borderRadius: 8, marginRight: 10 },
-  editBtnText: { color: '#3B82F6', fontWeight: 'bold' },
-  deleteBtn: { paddingVertical: 8, paddingHorizontal: 20, backgroundColor: '#FEE2E2', borderRadius: 8 },
-  deleteBtnText: { color: '#EF4444', fontWeight: 'bold' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  planOption: { flex: 1, padding: 10, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, alignItems: 'center', marginHorizontal: 2 },
+  planActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  planText: { fontSize: 11, color: '#64748B' },
+  planTextActive: { color: '#FFF', fontWeight: 'bold' },
+  saveBtn: { backgroundColor: '#3B82F6', padding: 15, borderRadius: 12, alignItems: 'center' },
+  saveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  cancelText: { textAlign: 'center', color: '#64748B', marginTop: 10 },
+  listSection: { paddingHorizontal: 20 },
+  listHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  listTitle: { fontSize: 18, fontWeight: 'bold' },
+  broadcastBtn: { backgroundColor: '#0EA5E9', padding: 8, borderRadius: 8 },
+  broadcastText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  searchInput: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'right' },
+  schoolCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 15, elevation: 2 },
+  cardHeader: { flexDirection: 'row-reverse', alignItems: 'center' },
+  cardLogo: { width: 40, height: 40, borderRadius: 20 },
+  logoPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  schoolName: { fontSize: 16, fontWeight: 'bold', textAlign: 'right' },
+  schoolEmail: { fontSize: 12, color: '#64748B', textAlign: 'right' },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  statusText: { fontSize: 10, fontWeight: 'bold' },
+  cardDetails: { marginTop: 10, padding: 10, backgroundColor: '#F8FAFC', borderRadius: 10 },
+  detailText: { fontSize: 12, color: '#475569', textAlign: 'right', marginBottom: 2 },
+  cardActions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 15, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10 },
+  actionBtn: { padding: 8, borderRadius: 8 },
+  actionText: { fontSize: 12, fontWeight: 'bold', color: '#3B82F6' },
+  emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 25 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginBottom: 20, textAlign: 'center' },
-  modalBtns: { flexDirection: 'row-reverse', marginTop: 10 },
-  modalSaveBtn: { flex: 1, backgroundColor: '#3B82F6', padding: 15, borderRadius: 10, alignItems: 'center' },
-  modalSaveBtnText: { color: '#FFF', fontWeight: 'bold' },
-  modalCancelBtn: { width: 80, backgroundColor: '#94A3B8', padding: 15, borderRadius: 10, alignItems: 'center', marginRight: 10 },
-  modalCancelBtnText: { color: '#FFF', fontWeight: 'bold' }
+  modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
+  msgInput: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 15, textAlign: 'right', height: 100, textAlignVertical: 'top' },
+  modalBtns: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+  modalBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', marginHorizontal: 5 },
+  sendBtn: { backgroundColor: '#3B82F6' },
+  closeBtn: { backgroundColor: '#94A3B8' },
+  modalBtnText: { color: '#FFF', fontWeight: 'bold' }
 });

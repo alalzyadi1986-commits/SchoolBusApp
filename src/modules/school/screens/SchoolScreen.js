@@ -40,12 +40,16 @@ export default function SchoolScreen({ route, navigation }) {
   const [emergencies, setEmergencies] = useState([]);
   const [reports, setReports] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [adminMessages, setAdminMessages] = useState([]);
 
   const [formData, setFormData] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [dynamicSchoolName, setDynamicSchoolName] = useState('');
+  
+  // ميزة عرض رسائل الإدارة
+  const [showMsgModal, setShowMsgModal] = useState(false);
 
   useEffect(() => {
     if (!schoolId) {
@@ -73,7 +77,13 @@ export default function SchoolScreen({ route, navigation }) {
       subscribeToSchoolData(schoolId, 'students', setStudents),
       subscribeToSchoolData(schoolId, 'emergencies', setEmergencies),
       subscribeToSchoolData(schoolId, 'reports', setReports),
-      subscribeToSchoolData(schoolId, 'managers', setManagers)
+      subscribeToSchoolData(schoolId, 'managers', setManagers),
+      subscribeToSchoolData(schoolId, 'messages', (msgs) => {
+        // ترتيب الرسائل من الأحدث للأقدم
+        const sorted = msgs.sort((a, b) => b.id - a.id);
+        setAdminMessages(sorted);
+        // إظهار تنبيه إذا كانت هناك رسالة جديدة لم تقرأ (اختياري)
+      })
     ];
 
     setLoading(false);
@@ -180,6 +190,13 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
+      {/* قسم التنبيهات والرسائل الإدارية */}
+      {adminMessages.length > 0 && (
+        <TouchableOpacity style={styles.msgAlert} onPress={() => setShowMsgModal(true)}>
+          <Text style={styles.msgAlertText}>لديك {adminMessages.length} رسائل إدارية جديدة ✉️</Text>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
           {[
@@ -226,6 +243,29 @@ export default function SchoolScreen({ route, navigation }) {
         </TouchableOpacity>
       )}
 
+      {/* مودال عرض الرسائل الإدارية */}
+      <Modal visible={showMsgModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>الرسائل الإدارية 📩</Text>
+            <FlatList
+              data={adminMessages}
+              keyExtractor={item => item.id.toString()}
+              renderItem={({ item }) => (
+                <View style={styles.msgItem}>
+                  <Text style={styles.msgDate}>{new Date(item.timestamp).toLocaleDateString('ar-EG')}</Text>
+                  <Text style={styles.msgText}>{item.content}</Text>
+                </View>
+              )}
+              style={{ maxHeight: 400 }}
+            />
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setShowMsgModal(false)}>
+              <Text style={styles.closeBtnText}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showForm} animationType="slide">
         <SafeAreaView style={{ flex: 1, padding: 20 }}>
           <Text style={[styles.title, { textAlign: 'center', marginBottom: 20 }]}>{editingId ? 'تعديل بيانات' : 'إضافة جديد'}</Text>
@@ -262,6 +302,8 @@ const styles = StyleSheet.create({
   logoPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold' },
+  msgAlert: { backgroundColor: '#3B82F6', padding: 10, alignItems: 'center' },
+  msgAlertText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: '#F1F5F9' },
@@ -282,5 +324,13 @@ const styles = StyleSheet.create({
   addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   inputWrapper: { marginBottom: 15 },
   inputLabel: { fontSize: 14, color: '#475569', marginBottom: 5, textAlign: 'right' },
-  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, textAlign: 'right' }
+  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, textAlign: 'right' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
+  msgItem: { padding: 15, backgroundColor: '#F1F5F9', borderRadius: 10, marginBottom: 10 },
+  msgDate: { fontSize: 10, color: '#64748B', marginBottom: 5, textAlign: 'right' },
+  msgText: { fontSize: 14, color: '#1E293B', textAlign: 'right' },
+  closeBtn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 15 },
+  closeBtnText: { color: '#FFF', fontWeight: 'bold' }
 });
