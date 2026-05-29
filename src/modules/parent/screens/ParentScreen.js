@@ -29,13 +29,23 @@ import {
   set,
 } from 'firebase/database';
 
-import { db } from '../firebaseConfig';
+import { db } from '../../../firebaseConfig';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { calculateDistance } from '../utils/geo';
+import { calculateDistance } from '../../../utils/geo';
 
-import { clearUserSession } from '../services/sessionService';
+import { clearUserSession } from '../../../services/sessionService';
+
+import {
+  subscribeToParentStudent,
+} from '../services/parentStudentService';
+
+import {
+  subscribeToDriverInfo,
+  subscribeToStaffInfo,
+  subscribeToBusLocation,
+} from '../services/parentBusService';
 
 const { width } = Dimensions.get('window');
 
@@ -93,64 +103,18 @@ export default function ParentScreen() {
 
     }
 
-    const unsubStudent = onValue(
+    const unsubStudent =
+      subscribeToParentStudent(
 
-      ref(
-        db,
-        `schools/${schoolId}/students`
-      ),
+        schoolId,
 
-      (snapshot) => {
+        user.username,
 
-        const data = snapshot.val();
+        setStudentInfo,
 
-        if (data) {
+        () => setLoading(false)
 
-          const myStudentKey =
-            Object.keys(data).find(
-
-              (key) =>
-
-                data[key]
-                  .parentUsername ===
-                  user.username ||
-
-                data[key]
-                  .parent_username ===
-                  user.username
-
-            );
-
-          if (myStudentKey) {
-
-            setStudentInfo({
-
-              id: myStudentKey,
-
-              ...data[myStudentKey],
-
-            });
-
-          }
-
-        }
-
-        setLoading(false);
-
-      },
-
-      (error) => {
-
-        console.error(
-          'Firebase students error:',
-          error
-        );
-
-        setLoading(false);
-
-      }
-
-    );
+      );
 
     const unsubSchool = onValue(
 
@@ -244,103 +208,46 @@ export default function ParentScreen() {
     if (!schoolId || !driverId)
       return;
 
-    const unsubDriver = onValue(
+    const unsubDriver =
+      subscribeToDriverInfo(
 
-      ref(
-        db,
-        `schools/${schoolId}/drivers/${driverId}`
-      ),
+        schoolId,
 
-      (snap) => {
+        driverId,
 
-        setDriverInfo(
-          snap.val()
-        );
+        setDriverInfo
 
-      }
+      );
 
-    );
+    const unsubStaff =
+      subscribeToStaffInfo(
 
-    const unsubStaff = onValue(
+        schoolId,
 
-      ref(
-        db,
-        `schools/${schoolId}/staff`
-      ),
+        driverId,
 
-      (snap) => {
+        setStaffInfo
 
-        const staffData =
-          snap.val();
+      );
 
-        if (staffData) {
+    const unsubBus =
+      subscribeToBusLocation(
 
-          setStaffInfo(
+        schoolId,
 
-            Object.values(
-              staffData
-            ).find(
+        driverId,
 
-              (s) =>
+        (newLoc) => {
 
-                s.driverUsername ===
-                  driverId ||
+          if (!newLoc) {
 
-                s.driver_id ===
-                  driverId
+            setBusLocation(null);
 
-            )
+            setAnimatedBusLocation(null);
 
-          );
-
-        }
-
-      }
-
-    );
-
-    const unsubBus = onValue(
-
-      ref(
-        db,
-        `schools/${schoolId}/bus/${driverId}`
-      ),
-
-      (snap) => {
-
-        const busData =
-          snap.val();
-
-        if (
-
-          busData &&
-          busData.isActive &&
-          busData.latitude &&
-          busData.longitude
-
-        ) {
-
-          const newLoc = {
-
-            latitude:
-              parseFloat(
-                busData.latitude
-              ),
-
-            longitude:
-              parseFloat(
-                busData.longitude
-              ),
-
-          };
-
-          if (
-
-            isNaN(newLoc.latitude) ||
-            isNaN(newLoc.longitude)
-
-          )
             return;
+
+          }
 
           if (!busLocation) {
 
@@ -420,19 +327,9 @@ export default function ParentScreen() {
 
           }
 
-        } else {
-
-          setBusLocation(null);
-
-          setAnimatedBusLocation(
-            null
-          );
-
         }
 
-      }
-
-    );
+      );
 
     return () => {
 
@@ -582,7 +479,6 @@ export default function ParentScreen() {
     if (!studentInfo) return;
 
     const isAbsent =
-
       studentInfo.status ===
       'absent_today';
 
@@ -704,11 +600,8 @@ export default function ParentScreen() {
     else
 
       Alert.alert(
-
         'خطأ',
-
         'رقم الهاتف غير متوفر'
-
       );
 
   };
@@ -772,7 +665,7 @@ export default function ParentScreen() {
         >
 
           <Text style={styles.title}>
-            تتبع الباص 🚌
+            لوحة الأهل 🚌
           </Text>
 
           <Text
@@ -1093,7 +986,7 @@ const styles =
     },
 
     title: {
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: 'bold',
       color: '#1E293B',
     },
@@ -1101,13 +994,15 @@ const styles =
     parentName: {
       fontSize: 14,
       color: '#64748B',
+      marginTop: 3,
     },
 
     logoutBtn: {
-      padding: 8,
+      paddingHorizontal: 15,
+      paddingVertical: 8,
       backgroundColor:
         '#FEE2E2',
-      borderRadius: 8,
+      borderRadius: 10,
     },
 
     logoutText: {
@@ -1172,6 +1067,7 @@ const styles =
       flexDirection: 'row',
       justifyContent:
         'space-between',
+      marginTop: 10,
     },
 
     contactBtn: {

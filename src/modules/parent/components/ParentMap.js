@@ -22,69 +22,73 @@ export default function ParentMap({
 
   return (
 
-    <MapView
-      style={styles.map}
+    <View style={styles.container}>
 
-      initialRegion={{
-        latitude:
-          myLocation?.latitude ||
-          31.9454,
+      <MapView
+        style={styles.map}
 
-        longitude:
-          myLocation?.longitude ||
-          35.9284,
+        initialRegion={{
+          latitude:
+            myLocation?.latitude ||
+            31.9454,
 
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      }}
-    >
+          longitude:
+            myLocation?.longitude ||
+            35.9284,
 
-      {
-        myLocation && (
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+      >
 
-          <Marker
-            coordinate={myLocation}
-            title="منزلي"
-            pinColor="green"
-          />
+        {
+          myLocation && (
 
-        )
-      }
+            <Marker
+              coordinate={myLocation}
+              title="منزلي"
+              pinColor="green"
+            />
 
-      {
-        schoolLoc && (
+          )
+        }
 
-          <Marker
-            coordinate={schoolLoc}
-            title="المدرسة"
-            pinColor="red"
-          />
+        {
+          schoolLoc && (
 
-        )
-      }
+            <Marker
+              coordinate={schoolLoc}
+              title="المدرسة"
+              pinColor="red"
+            />
 
-      {
-        animatedBusLocation && (
+          )
+        }
 
-          <Marker
-            coordinate={animatedBusLocation}
-            title="الباص"
-          >
+        {
+          animatedBusLocation && (
 
-            <View style={styles.busMarker}>
+            <Marker
+              coordinate={animatedBusLocation}
+              title="الباص"
+            >
 
-              <Text style={styles.busEmoji}>
-                🚌
-              </Text>
+              <View style={styles.busMarker}>
 
-            </View>
+                <Text style={styles.busEmoji}>
+                  🚌
+                </Text>
 
-          </Marker>
+              </View>
 
-        )
-      }
+            </Marker>
 
-    </MapView>
+          )
+        }
+
+      </MapView>
+
+    </View>
 
   );
 
@@ -92,12 +96,16 @@ export default function ParentMap({
 
 const styles = StyleSheet.create({
 
-  map: {
-    flex: 1,
-    width: '100%',
+  container: {
+    marginHorizontal: 15,
+    marginBottom: 15,
     borderRadius: 15,
-    margin: 15,
     overflow: 'hidden',
+  },
+
+  map: {
+    height: 350,
+    width: '100%',
   },
 
   busMarker: {
