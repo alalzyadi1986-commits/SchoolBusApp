@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
-  ScrollView,
   ActivityIndicator,
   StatusBar,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -29,6 +29,8 @@ export default function SchoolScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [expiryDate, setExpiryDate] = useState('');
   const [isExpired, setIsExpired] = useState(false);
+  const [schoolLimits, setSchoolLimits] = useState({ maxBuses: 3, maxStudents: 50 });
+  const [schoolLogo, setSchoolLogo] = useState('');
 
   const [drivers, setDrivers] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -53,9 +55,13 @@ export default function SchoolScreen({ route, navigation }) {
 
     const schoolUnsub = subscribeToSchoolInfo(schoolId, (data) => {
       if (data) {
-        setDynamicSchoolName(data.name || '');
+        setDynamicSchoolName(data.displayName || data.name || '');
         setExpiryDate(data.endDate || '');
         setIsExpired(new Date(data.endDate) < new Date());
+        setSchoolLogo(data.logoUrl || '');
+        if (data.limits) {
+          setSchoolLimits(data.limits);
+        }
       }
     });
 
@@ -98,6 +104,19 @@ export default function SchoolScreen({ route, navigation }) {
         Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية (الاسم واسم المستخدم)');
         return;
       }
+
+      // التحقق من الحدود البرمجية للباقة (فقط عند الإضافة الجديدة)
+      if (!editingId) {
+        if (activeTab === 'drivers' && drivers.length >= schoolLimits.maxBuses) {
+          Alert.alert('تنبيه الباقة', `لقد وصلت للحد الأقصى المسموح به من الحافلات (${schoolLimits.maxBuses}). يرجى ترقية باقة اشتراكك.`);
+          return;
+        }
+        if (activeTab === 'students' && students.length >= schoolLimits.maxStudents) {
+          Alert.alert('تنبيه الباقة', `لقد وصلت للحد الأقصى المسموح به من الطلاب (${schoolLimits.maxStudents}). يرجى ترقية باقة اشتراكك.`);
+          return;
+        }
+      }
+
       try {
         await saveSchoolItem(schoolId, activeTab, editingId, formData);
         setFormData({});
@@ -147,9 +166,16 @@ export default function SchoolScreen({ route, navigation }) {
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
-          <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+            <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
+            <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
+          </View>
+          {schoolLogo ? (
+            <Image source={{ uri: schoolLogo }} style={styles.logo} />
+          ) : (
+            <View style={styles.logoPlaceholder}><Text style={{ fontSize: 20 }}>🏫</Text></View>
+          )}
         </View>
       </View>
 
@@ -229,8 +255,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
-  expiryText: { fontSize: 12, color: '#EF4444', marginTop: 4 },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  expiryText: { fontSize: 11, color: '#EF4444', marginTop: 2 },
+  logo: { width: 50, height: 50, borderRadius: 25, resizeMode: 'contain', backgroundColor: '#F1F5F9' },
+  logoPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold' },
   tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },

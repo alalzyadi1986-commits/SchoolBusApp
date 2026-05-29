@@ -31,6 +31,10 @@ export default function SuperAdminScreen({ navigation }) {
 
   const [schools, setSchools] = useState([]);
   const [schoolName, setSchoolName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [googleMapsLink, setGoogleMapsLink] = useState('');
+  const [planType, setPlanType] = useState('1'); // '1', '2', '3'
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
@@ -119,6 +123,19 @@ export default function SuperAdminScreen({ navigation }) {
 
   };
 
+  const getPlanLimits = (type) => {
+    switch (type) {
+      case '1':
+        return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى' };
+      case '2':
+        return { maxBuses: 10, maxStudents: 200, label: 'الباقة المتوسطة' };
+      case '3':
+        return { maxBuses: 100, maxStudents: 2000, label: 'الباقة المفتوحة' };
+      default:
+        return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى' };
+    }
+  };
+
   const generateSchoolId = async () => {
 
     const snapshot = await get(ref(db, 'schools'));
@@ -153,13 +170,14 @@ export default function SuperAdminScreen({ navigation }) {
 
     if (
       !schoolName ||
+      !displayName ||
       !adminEmail ||
       !adminPassword
     ) {
 
       Alert.alert(
         'خطأ',
-        'يرجى تعبئة جميع الحقول'
+        'يرجى تعبئة الحقول الأساسية (اسم النظام، اسم العرض، البريد، كلمة المرور)'
       );
 
       return;
@@ -168,9 +186,15 @@ export default function SuperAdminScreen({ navigation }) {
     setLoading(true);
 
     try {
+      const limits = getPlanLimits(planType);
 
       const schoolData = {
         name: schoolName,
+        displayName: displayName,
+        logoUrl: logoUrl,
+        googleMapsLink: googleMapsLink,
+        planType: planType,
+        limits: limits,
         email: adminEmail,
         password: adminPassword,
         startDate: startDate.toISOString(),
@@ -227,7 +251,7 @@ export default function SuperAdminScreen({ navigation }) {
           'students',
           'parents',
           'staff',
-          'buses',
+          'bus',
           'tracking',
           'managers',
           'emergencies',
@@ -235,17 +259,15 @@ export default function SuperAdminScreen({ navigation }) {
         ];
 
         for (const branch of branches) {
-
           await set(
             ref(
               db,
               `schools/${newSchoolId}/${branch}`
             ),
             {
-              temp: true
+              _init: true
             }
           );
-
         }
 
         await set(
@@ -290,8 +312,11 @@ export default function SuperAdminScreen({ navigation }) {
   };
 
   const resetForm = () => {
-
     setSchoolName('');
+    setDisplayName('');
+    setLogoUrl('');
+    setGoogleMapsLink('');
+    setPlanType('1');
     setAdminEmail('');
     setAdminPassword('');
 
@@ -306,14 +331,15 @@ export default function SuperAdminScreen({ navigation }) {
     );
 
     setEditingSchoolId(null);
-
   };
 
   const handleEditPress = (school) => {
-
     setEditingSchoolId(school.id);
-
     setSchoolName(school.name);
+    setDisplayName(school.displayName || school.name);
+    setLogoUrl(school.logoUrl || '');
+    setGoogleMapsLink(school.googleMapsLink || '');
+    setPlanType(school.planType || '1');
     setAdminEmail(school.email);
     setAdminPassword(school.password);
 
@@ -504,17 +530,68 @@ export default function SuperAdminScreen({ navigation }) {
             {editingSchoolId ? 'تعديل بيانات المدرسة' : 'إضافة مدرسة جديدة'}
           </Text>
 
+          <Text style={styles.inputLabel}>اسم المدرسة (للنظام)</Text>
           <TextInput
             style={styles.input}
-            placeholder="اسم المدرسة"
+            placeholder="مثال: alrajeh_school"
             value={schoolName}
             onChangeText={setSchoolName}
             textAlign="right"
+            autoCapitalize="none"
           />
 
+          <Text style={styles.inputLabel}>اسم العرض (يظهر للجميع)</Text>
           <TextInput
             style={styles.input}
-            placeholder="البريد الإلكتروني (اسم المستخدم)"
+            placeholder="مثال: مدارس الراجح النموذجية"
+            value={displayName}
+            onChangeText={setDisplayName}
+            textAlign="right"
+          />
+
+          <Text style={styles.inputLabel}>رابط شعار المدرسة (URL)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="https://example.com/logo.png"
+            value={logoUrl}
+            onChangeText={setLogoUrl}
+            textAlign="right"
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.inputLabel}>رابط تقييم جوجل مابس</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="https://maps.app.goo.gl/..."
+            value={googleMapsLink}
+            onChangeText={setGoogleMapsLink}
+            textAlign="right"
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.inputLabel}>نوع باقة الاشتراك</Text>
+          <View style={styles.planContainer}>
+            {[
+              { id: '1', label: 'باقة 1 (3 باصات)' },
+              { id: '2', label: 'باقة 2 (10 باصات)' },
+              { id: '3', label: 'باقة 3 (مفتوحة)' }
+            ].map((plan) => (
+              <TouchableOpacity
+                key={plan.id}
+                style={[styles.planOption, planType === plan.id && styles.planOptionActive]}
+                onPress={() => setPlanType(plan.id)}
+              >
+                <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>
+                  {plan.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.inputLabel}>البريد الإلكتروني (اسم المستخدم)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="admin@school.com"
             value={adminEmail}
             onChangeText={setAdminEmail}
             autoCapitalize="none"
@@ -523,6 +600,7 @@ export default function SuperAdminScreen({ navigation }) {
             editable={!editingSchoolId}
           />
 
+          <Text style={styles.inputLabel}>كلمة المرور</Text>
           <TextInput
             style={styles.input}
             placeholder="كلمة المرور"
@@ -585,17 +663,23 @@ export default function SuperAdminScreen({ navigation }) {
           <Text style={styles.sectionTitle}>المدارس المسجلة ({schools.length})</Text>
           {schools.map((item) => {
             const status = checkSubscriptionStatus(item.endDate);
+            const limits = getPlanLimits(item.planType);
             return (
               <View key={item.id} style={styles.schoolCard}>
                 <View style={styles.schoolHeader}>
-                  <Text style={styles.schoolName}>{item.name}</Text>
+                  <Text style={styles.schoolName}>{item.displayName || item.name}</Text>
                   <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
                     <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
                   </View>
                 </View>
                 
+                <View style={styles.planBadge}>
+                  <Text style={styles.planBadgeText}>{limits.label}</Text>
+                </View>
+
                 <Text style={styles.schoolInfo}>📧 {item.email}</Text>
                 <Text style={styles.schoolInfo}>📅 ينتهي في: {formatDate(item.endDate)}</Text>
+                <Text style={styles.schoolInfo}>🚌 الحد الأقصى للباصات: {limits.maxBuses}</Text>
 
                 <View style={styles.actionRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => handleEditPress(item)}>
@@ -649,7 +733,13 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 15 },
   formCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 15, elevation: 2, marginBottom: 20 },
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginBottom: 15, textAlign: 'right' },
-  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 14 },
+  inputLabel: { fontSize: 13, color: '#64748B', marginBottom: 5, textAlign: 'right', fontWeight: '600' },
+  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 14 },
+  planContainer: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 20 },
+  planOption: { flex: 1, paddingVertical: 10, backgroundColor: '#F1F5F9', borderRadius: 8, marginHorizontal: 4, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  planOptionActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  planText: { fontSize: 11, color: '#64748B', fontWeight: 'bold' },
+  planTextActive: { color: '#FFF' },
   dateRow: { marginBottom: 10 },
   dateBtn: { backgroundColor: '#EFF6FF', padding: 12, borderRadius: 10, alignItems: 'flex-end' },
   dateBtnText: { color: '#3B82F6', fontWeight: '600' },
@@ -665,6 +755,8 @@ const styles = StyleSheet.create({
   schoolName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 12, fontWeight: 'bold' },
+  planBadge: { alignSelf: 'flex-end', backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#B9E6FE' },
+  planBadgeText: { color: '#0284C7', fontSize: 11, fontWeight: 'bold' },
   schoolInfo: { fontSize: 13, color: '#64748B', marginBottom: 5, textAlign: 'right' },
   actionRow: { flexDirection: 'row', marginTop: 10 },
   editBtn: { paddingVertical: 8, paddingHorizontal: 20, backgroundColor: '#EFF6FF', borderRadius: 8, marginRight: 10 },

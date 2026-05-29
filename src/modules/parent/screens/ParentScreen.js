@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
+  Image,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -24,6 +25,7 @@ import { clearUserSession } from '../../../services/sessionService';
 import ParentMap from '../components/ParentMap';
 import { subscribeToParentStudent } from '../services/parentStudentService';
 import { subscribeToDriverInfo, subscribeToStaffInfo, subscribeToBusLocation } from '../services/parentBusService';
+import { subscribeToSchoolInfo } from '../../school/services/schoolDataService';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +44,8 @@ export default function ParentScreen() {
   const [driverInfo, setDriverInfo] = useState(null);
   const [staffInfo, setStaffInfo] = useState(null);
   const [schoolLoc, setSchoolLoc] = useState(null);
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolLogo, setSchoolLogo] = useState('');
 
   useEffect(() => {
     if (!schoolId || !user?.username) {
@@ -51,13 +55,17 @@ export default function ParentScreen() {
 
     const unsubStudent = subscribeToParentStudent(schoolId, user.username, setStudentInfo, () => setLoading(false));
 
-    const unsubSchool = onValue(ref(db, `schools/${schoolId}`), (snap) => {
-      const data = snap.val();
-      if (data?.latitude && data?.longitude) {
-        setSchoolLoc({
-          latitude: parseFloat(data.latitude),
-          longitude: parseFloat(data.longitude),
-        });
+    // جلب هوية المدرسة وموقعها
+    const unsubSchool = subscribeToSchoolInfo(schoolId, (data) => {
+      if (data) {
+        setSchoolName(data.displayName || data.name || '');
+        setSchoolLogo(data.logoUrl || '');
+        if (data.latitude && data.longitude) {
+          setSchoolLoc({
+            latitude: parseFloat(data.latitude),
+            longitude: parseFloat(data.longitude),
+          });
+        }
       }
     });
 
@@ -157,9 +165,16 @@ export default function ParentScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.title}>تتبع الباص 📍</Text>
-          <Text style={styles.studentName}>{studentInfo?.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={styles.headerInfo}>
+            <Text style={styles.title}>{schoolName || 'تتبع الباص'}</Text>
+            <Text style={styles.studentName}>{studentInfo?.name}</Text>
+          </View>
+          {schoolLogo ? (
+            <Image source={{ uri: schoolLogo }} style={styles.logo} />
+          ) : (
+            <View style={styles.logoPlaceholder}><Text style={{ fontSize: 20 }}>🏠</Text></View>
+          )}
         </View>
       </View>
 
@@ -194,9 +209,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  headerInfo: { alignItems: 'flex-end' },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  studentName: { fontSize: 14, color: '#64748B' },
+  headerInfo: { alignItems: 'flex-end', marginRight: 10 },
+  title: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
+  studentName: { fontSize: 13, color: '#64748B' },
+  logo: { width: 45, height: 45, borderRadius: 22.5, resizeMode: 'contain', backgroundColor: '#F1F5F9' },
+  logoPlaceholder: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
   infoPanel: { position: 'absolute', bottom: 30, left: 20, right: 20, backgroundColor: '#FFF', borderRadius: 20, padding: 20, elevation: 5 },

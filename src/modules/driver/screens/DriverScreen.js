@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
+  Image,
 } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +29,7 @@ import { updateBusLocation } from '../../../services/busService';
 import { subscribeToDriverStudents } from '../services/driverStudentService';
 import { startLiveLocationTracking } from '../services/driverLocationService';
 import { startBackgroundTracking, stopBackgroundTracking } from '../services/driverBackgroundService';
+import { subscribeToSchoolInfo } from '../../school/services/schoolDataService';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
@@ -40,6 +42,9 @@ export default function DriverScreen() {
   const [isTripActive, setIsTripActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolLogo, setSchoolLogo] = useState('');
+  
   const mapRef = useRef(null);
   const watchSubscription = useRef(null);
 
@@ -49,10 +54,20 @@ export default function DriverScreen() {
       return;
     }
     initializeScreen();
+    
+    // جلب هوية المدرسة
+    const unsubSchool = subscribeToSchoolInfo(schoolId, (data) => {
+      if (data) {
+        setSchoolName(data.displayName || data.name || '');
+        setSchoolLogo(data.logoUrl || '');
+      }
+    });
+
     return () => {
       if (watchSubscription.current) {
         watchSubscription.current.remove();
       }
+      unsubSchool();
     };
   }, []);
 
@@ -156,9 +171,16 @@ export default function DriverScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.title}>لوحة السائق 🚌</Text>
-          <Text style={styles.driverName}>{user?.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={styles.headerInfo}>
+            <Text style={styles.title}>{schoolName || 'لوحة السائق'}</Text>
+            <Text style={styles.driverName}>{user?.name}</Text>
+          </View>
+          {schoolLogo ? (
+            <Image source={{ uri: schoolLogo }} style={styles.logo} />
+          ) : (
+            <View style={styles.logoPlaceholder}><Text style={{ fontSize: 20 }}>🚌</Text></View>
+          )}
         </View>
       </View>
 
@@ -216,9 +238,11 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#64748B' },
   header: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  headerInfo: { alignItems: 'flex-end' },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  driverName: { fontSize: 14, color: '#64748B' },
+  headerInfo: { alignItems: 'flex-end', marginRight: 10 },
+  title: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
+  driverName: { fontSize: 13, color: '#64748B' },
+  logo: { width: 45, height: 45, borderRadius: 22.5, resizeMode: 'contain', backgroundColor: '#F1F5F9' },
+  logoPlaceholder: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
   statusCard: { padding: 15, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
