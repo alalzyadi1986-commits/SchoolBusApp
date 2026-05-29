@@ -11,6 +11,7 @@ import {
   StatusBar,
   Modal,
   Image,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
