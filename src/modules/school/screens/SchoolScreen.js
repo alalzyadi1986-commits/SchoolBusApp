@@ -274,10 +274,33 @@ export default function SchoolScreen({ route, navigation }) {
     return {
       buses: drivers.length,
       students: students.length,
+      staff: staff.length,
+      parents: parents.length,
       emergencies: emergencies.filter(e => !e.resolved).length,
       activeTrips: drivers.filter(d => d.isOnline).length
     };
-  }, [drivers, students, emergencies]);
+  }, [drivers, students, staff, parents, emergencies]);
+
+  const renderReports = () => (
+    <ScrollView style={{ padding: 15 }}>
+      <View style={[styles.card, { flexDirection: 'column', alignItems: 'flex-end' }]}>
+        <Text style={[styles.cardTitle, { marginBottom: 15 }]}>📊 ملخص إحصائيات المدرسة</Text>
+        <View style={styles.reportRow}><Text style={styles.reportValue}>{stats.students}</Text><Text style={styles.reportLabel}>إجمالي الطلاب:</Text></View>
+        <View style={styles.reportRow}><Text style={styles.reportValue}>{stats.buses}</Text><Text style={styles.reportLabel}>إجمالي الحافلات:</Text></View>
+        <View style={styles.reportRow}><Text style={styles.reportValue}>{stats.staff}</Text><Text style={styles.reportLabel}>إجمالي المرافقات:</Text></View>
+        <View style={styles.reportRow}><Text style={styles.reportValue}>{stats.parents}</Text><Text style={styles.reportLabel}>إجمالي أولياء الأمور:</Text></View>
+        <View style={styles.reportRow}><Text style={[styles.reportValue, { color: '#EF4444' }]}>{stats.emergencies}</Text><Text style={styles.reportLabel}>طوارئ لم تُحل:</Text></View>
+      </View>
+      
+      <View style={[styles.card, { flexDirection: 'column', alignItems: 'flex-end', marginTop: 10 }]}>
+        <Text style={styles.cardTitle}>📅 حالة الاشتراك</Text>
+        <Text style={[styles.cardSub, { marginTop: 5 }]}>تاريخ الانتهاء: {expiryDate.split('T')[0]}</Text>
+        <Text style={[styles.cardSub, { color: isExpired ? '#EF4444' : '#10B981', fontWeight: 'bold' }]}>
+          الحالة: {isExpired ? 'منتهي (يرجى التجديد)' : 'نشط'}
+        </Text>
+      </View>
+    </ScrollView>
+  );
 
   const renderInput = (placeholder, field, isNumeric = false) => (
     <View style={styles.inputWrapper} key={field}>
@@ -380,6 +403,7 @@ export default function SchoolScreen({ route, navigation }) {
         <TextInput style={styles.searchInput} placeholder="بحث بالاسم أو اسم المستخدم..." value={searchQuery} onChangeText={setSearchQuery} />
       </View>
 
+      {activeTab === 'reports' ? renderReports() : (
       <FlatList
         data={currentData}
         keyExtractor={item => item.id}
@@ -399,6 +423,7 @@ export default function SchoolScreen({ route, navigation }) {
         )}
         ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#64748B' }}>لا توجد بيانات</Text>}
       />
+      )}
 
       {activeTab !== 'reports' && activeTab !== 'emergencies' && (
         <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
@@ -480,8 +505,40 @@ export default function SchoolScreen({ route, navigation }) {
             {activeTab === 'drivers' && renderInput('رقم الجوال', 'phone', true)}
             {activeTab === 'drivers' && renderInput('رقم اللوحة', 'busPlate')}
             {activeTab === 'students' && renderInput('الصف', 'class')}
-            {activeTab === 'students' && renderInput('اسم ولي الأمر', 'parentUsername')}
-            {activeTab === 'students' && renderInput('اسم السائق', 'driverUsername')}
+            
+            {activeTab === 'students' && (
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>اختيار ولي الأمر:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row-reverse' }}>
+                  {parents.map(p => (
+                    <TouchableOpacity 
+                      key={p.id} 
+                      style={[styles.pickerItem, formData.parentUsername === p.username && styles.pickerItemActive]}
+                      onPress={() => setFormData({ ...formData, parentUsername: p.username })}
+                    >
+                      <Text style={[styles.pickerText, formData.parentUsername === p.username && styles.pickerTextActive]}>{p.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {activeTab === 'students' && (
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>اختيار السائق:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row-reverse' }}>
+                  {drivers.map(d => (
+                    <TouchableOpacity 
+                      key={d.id} 
+                      style={[styles.pickerItem, formData.driverUsername === d.username && styles.pickerItemActive]}
+                      onPress={() => setFormData({ ...formData, driverUsername: d.username })}
+                    >
+                      <Text style={[styles.pickerText, formData.driverUsername === d.username && styles.pickerTextActive]}>{d.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             {/* قسم الصلاحيات عند إضافة مدير فرعي */}
             {activeTab === 'managers' && (
@@ -574,8 +631,15 @@ const styles = StyleSheet.create({
   inputWrapper: { marginBottom: 15 },
   inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginBottom: 5, textAlign: 'right' },
   input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' },
+  pickerItem: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginLeft: 8, marginBottom: 5 },
+  pickerItemActive: { backgroundColor: '#3B82F6' },
+  pickerText: { fontSize: 12, color: '#64748B' },
+  pickerTextActive: { color: '#FFF', fontWeight: 'bold' },
   permsSection: { marginTop: 20, padding: 15, backgroundColor: '#F8FAFC', borderRadius: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
   permsTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 15, textAlign: 'right' },
+  reportRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', width: '100%', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  reportLabel: { fontSize: 14, color: '#475569' },
+  reportValue: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
   permRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   permLabel: { fontSize: 14, color: '#475569' },
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
