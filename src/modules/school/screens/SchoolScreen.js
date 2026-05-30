@@ -51,6 +51,11 @@ export default function SchoolScreen({ route, navigation }) {
   // ميزة عرض رسائل الإدارة
   const [showMsgModal, setShowMsgModal] = useState(false);
 
+  // ميزة الإعلانات المدرسية
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [broadcastTarget, setBroadcastTarget] = useState('all'); // 'all', 'parents', 'drivers'
+  const [broadcastContent, setBroadcastContent] = useState('');
+
   useEffect(() => {
     if (!schoolId) {
       setLoading(false);
@@ -79,10 +84,8 @@ export default function SchoolScreen({ route, navigation }) {
       subscribeToSchoolData(schoolId, 'reports', setReports),
       subscribeToSchoolData(schoolId, 'managers', setManagers),
       subscribeToSchoolData(schoolId, 'messages', (msgs) => {
-        // ترتيب الرسائل من الأحدث للأقدم
         const sorted = msgs.sort((a, b) => b.id - a.id);
         setAdminMessages(sorted);
-        // إظهار تنبيه إذا كانت هناك رسالة جديدة لم تقرأ (اختياري)
       })
     ];
 
@@ -116,7 +119,6 @@ export default function SchoolScreen({ route, navigation }) {
         return;
       }
 
-      // التحقق من الحدود البرمجية للباقة (فقط عند الإضافة الجديدة)
       if (!editingId) {
         if (activeTab === 'drivers' && drivers.length >= schoolLimits.maxBuses) {
           Alert.alert('تنبيه الباقة', `لقد وصلت للحد الأقصى المسموح به من الحافلات (${schoolLimits.maxBuses}). يرجى ترقية باقة اشتراكك.`);
@@ -140,6 +142,32 @@ export default function SchoolScreen({ route, navigation }) {
     }
   };
 
+  const handleSendBroadcast = async () => {
+    if (!broadcastContent.trim()) return;
+    setLoading(true);
+    try {
+      const broadcastData = {
+        id: Date.now(),
+        sender: 'مدير المدرسة',
+        content: broadcastContent,
+        timestamp: new Date().toISOString(),
+        type: 'school_broadcast',
+        target: broadcastTarget
+      };
+      
+      // حفظ الإعلان في قاعدة بيانات المدرسة ليراه الجميع
+      await saveSchoolItem(schoolId, 'school_announcements', null, broadcastData);
+      
+      Alert.alert('نجاح', 'تم إرسال الإعلان لجميع المعنيين');
+      setShowBroadcastModal(false);
+      setBroadcastContent('');
+    } catch (e) {
+      Alert.alert('خطأ', 'فشل إرسال الإعلان');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert("تسجيل الخروج", "هل تريد الخروج؟", [
       { text: "إلغاء", style: "cancel" },
@@ -155,6 +183,15 @@ export default function SchoolScreen({ route, navigation }) {
       item.username?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [activeTab, drivers, staff, parents, students, managers, reports, emergencies, searchQuery]);
+
+  const stats = useMemo(() => {
+    return {
+      buses: drivers.length,
+      students: students.length,
+      emergencies: emergencies.filter(e => !e.resolved).length,
+      activeTrips: drivers.filter(d => d.isOnline).length
+    };
+  }, [drivers, students, emergencies]);
 
   const renderInput = (placeholder, field, isNumeric = false) => (
     <View style={styles.inputWrapper} key={field}>
@@ -190,12 +227,39 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* قسم التنبيهات والرسائل الإدارية */}
-      {adminMessages.length > 0 && (
-        <TouchableOpacity style={styles.msgAlert} onPress={() => setShowMsgModal(true)}>
-          <Text style={styles.msgAlertText}>لديك {adminMessages.length} رسائل إدارية جديدة ✉️</Text>
+      {/* لوحة الإحصائيات الذكية */}
+      <View style={styles.statsContainer}>
+        <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
+          <Text style={styles.statValue}>{stats.buses}</Text>
+          <Text style={styles.statLabel}>باصات</Text>
+        </View>
+        <View style={[styles.statCard, { borderRightColor: '#10B981' }]}>
+          <Text style={styles.statValue}>{stats.students}</Text>
+          <Text style={styles.statLabel}>طلاب</Text>
+        </View>
+        <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
+          <Text style={styles.statValue}>{stats.activeTrips}</Text>
+          <Text style={styles.statLabel}>رحلات نشطة</Text>
+        </View>
+        <TouchableOpacity 
+          style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
+          onPress={() => setActiveTab('emergencies')}
+        >
+          <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
+          <Text style={styles.statLabel}>طوارئ</Text>
         </TouchableOpacity>
-      )}
+      </View>
+
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => setShowBroadcastModal(true)}>
+          <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
+        </TouchableOpacity>
+        {adminMessages.length > 0 && (
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#3B82F6' }]} onPress={() => setShowMsgModal(true)}>
+            <Text style={styles.actionButtonText}>رسائل الإدارة ({adminMessages.length}) ✉️</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
@@ -217,9 +281,9 @@ export default function SchoolScreen({ route, navigation }) {
       <FlatList
         data={currentData}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 15 }}
+        contentContainerStyle={{ padding: 15, paddingBottom: 100 }}
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <View style={[styles.card, activeTab === 'emergencies' && !item.resolved && { borderColor: '#EF4444', borderWidth: 1 }]}>
             <View style={styles.cardActions}>
               <TouchableOpacity style={styles.editBtn} onPress={() => { setFormData(item); setEditingId(item.id); setShowForm(true); }}>
                 <Text style={styles.editBtnText}>تعديل</Text>
@@ -231,6 +295,7 @@ export default function SchoolScreen({ route, navigation }) {
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <Text style={styles.cardTitle}>{item.name}</Text>
               <Text style={styles.cardSub}>{item.username || item.id}</Text>
+              {activeTab === 'emergencies' && <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: 'bold' }}>⚠️ {item.type || 'حالة طوارئ'}</Text>}
             </View>
           </View>
         )}
@@ -242,6 +307,45 @@ export default function SchoolScreen({ route, navigation }) {
           <Text style={styles.addBtnText}>+ إضافة جديد</Text>
         </TouchableOpacity>
       )}
+
+      {/* مودال الإعلانات المدرسية */}
+      <Modal visible={showBroadcastModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>إرسال إعلان للمدرسة 📢</Text>
+            <View style={styles.targetContainer}>
+              {[
+                { id: 'all', label: 'الجميع' },
+                { id: 'parents', label: 'الأهل' },
+                { id: 'drivers', label: 'السائقين' }
+              ].map(t => (
+                <TouchableOpacity 
+                  key={t.id} 
+                  style={[styles.targetBtn, broadcastTarget === t.id && styles.targetBtnActive]}
+                  onPress={() => setBroadcastTarget(t.id)}
+                >
+                  <Text style={[styles.targetText, broadcastTarget === t.id && styles.targetTextActive]}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput 
+              style={styles.msgInput} 
+              placeholder="اكتب محتوى الإعلان هنا..." 
+              multiline 
+              value={broadcastContent} 
+              onChangeText={setBroadcastContent} 
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.modalBtn, styles.sendBtn]} onPress={handleSendBroadcast}>
+                <Text style={styles.modalBtnText}>إرسال الإعلان</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.closeBtn]} onPress={() => setShowBroadcastModal(false)}>
+                <Text style={styles.modalBtnText}>إلغاء</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* مودال عرض الرسائل الإدارية */}
       <Modal visible={showMsgModal} transparent animationType="fade">
@@ -302,8 +406,13 @@ const styles = StyleSheet.create({
   logoPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold' },
-  msgAlert: { backgroundColor: '#3B82F6', padding: 10, alignItems: 'center' },
-  msgAlertText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  statsContainer: { flexDirection: 'row-reverse', padding: 15, justifyContent: 'space-between' },
+  statCard: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 12, marginHorizontal: 4, alignItems: 'center', elevation: 2, borderRightWidth: 4 },
+  statValue: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  statLabel: { fontSize: 10, color: '#64748B', marginTop: 2 },
+  quickActions: { flexDirection: 'row-reverse', paddingHorizontal: 15, marginBottom: 10 },
+  actionButton: { backgroundColor: '#10B981', padding: 10, borderRadius: 10, marginLeft: 10, flex: 1, alignItems: 'center' },
+  actionButtonText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: '#F1F5F9' },
@@ -318,19 +427,29 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: 'row' },
   editBtn: { padding: 8, backgroundColor: '#EFF6FF', borderRadius: 8, marginRight: 8 },
   editBtnText: { color: '#3B82F6', fontSize: 12, fontWeight: 'bold' },
-  deleteBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8, marginRight: 15 },
+  deleteBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   deleteBtnText: { color: '#EF4444', fontSize: 12, fontWeight: 'bold' },
-  addBtn: { backgroundColor: '#10B981', padding: 15, borderRadius: 12, alignItems: 'center', margin: 15 },
-  addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  inputWrapper: { marginBottom: 15 },
-  inputLabel: { fontSize: 14, color: '#475569', marginBottom: 5, textAlign: 'right' },
-  input: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, textAlign: 'right' },
+  addBtn: { position: 'absolute', bottom: 20, left: 20, right: 20, backgroundColor: '#3B82F6', padding: 15, borderRadius: 15, alignItems: 'center', elevation: 5 },
+  addBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
-  msgItem: { padding: 15, backgroundColor: '#F1F5F9', borderRadius: 10, marginBottom: 10 },
-  msgDate: { fontSize: 10, color: '#64748B', marginBottom: 5, textAlign: 'right' },
-  msgText: { fontSize: 14, color: '#1E293B', textAlign: 'right' },
-  closeBtn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 15 },
-  closeBtnText: { color: '#FFF', fontWeight: 'bold' }
+  targetContainer: { flexDirection: 'row-reverse', justifyContent: 'space-around', marginBottom: 15 },
+  targetBtn: { padding: 8, borderRadius: 10, backgroundColor: '#F1F5F9', flex: 1, marginHorizontal: 5, alignItems: 'center' },
+  targetBtnActive: { backgroundColor: '#3B82F6' },
+  targetText: { fontSize: 12, color: '#64748B' },
+  targetTextActive: { color: '#FFF', fontWeight: 'bold' },
+  msgInput: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 15, textAlign: 'right', height: 100, textAlignVertical: 'top' },
+  modalBtns: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+  modalBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', marginHorizontal: 5 },
+  sendBtn: { backgroundColor: '#3B82F6' },
+  closeBtn: { backgroundColor: '#94A3B8', marginTop: 15, padding: 12, borderRadius: 10, alignItems: 'center' },
+  closeBtnText: { color: '#FFF', fontWeight: 'bold' },
+  modalBtnText: { color: '#FFF', fontWeight: 'bold' },
+  msgItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  msgDate: { fontSize: 10, color: '#94A3B8', textAlign: 'right' },
+  msgText: { fontSize: 14, color: '#1E293B', textAlign: 'right', marginTop: 5 },
+  inputWrapper: { marginBottom: 15 },
+  inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginBottom: 5, textAlign: 'right' },
+  input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' },
 });
