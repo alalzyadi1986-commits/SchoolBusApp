@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,144 @@ import {
 import { ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import * as ImagePicker from 'expo-image-picker';
+
+// --- المكونات الفرعية معرفة خارج المكون الرئيسي لضمان ثبات المراجع البرمجية وحل مشكلة لوحة المفاتيح نهائياً ---
+
+const SchoolItem = React.memo(({ item, onEdit, onMsg, onDelete, checkStatus, getLimits, format }) => {
+  const status = checkStatus(item.endDate);
+  const limits = getLimits(item.planType);
+  return (
+    <View style={styles.schoolCard}>
+      <View style={styles.cardHeader}>
+        {item.logoUrl ? (
+          <Image source={{ uri: item.logoUrl }} style={styles.cardLogo} />
+        ) : (
+          <View style={styles.logoPlaceholder}><Text>🏫</Text></View>
+        )}
+        <View style={{ flex: 1, marginRight: 10 }}>
+          <Text style={styles.schoolName}>{item.displayName || item.name}</Text>
+          <Text style={styles.schoolEmail}>{item.email}</Text>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
+          <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+        </View>
+      </View>
+      <View style={styles.cardDetails}>
+        <Text style={styles.detailText}>📦 {limits.label}</Text>
+        <Text style={styles.detailText}>📅 ينتهي: {format(item.endDate)}</Text>
+      </View>
+      <View style={styles.cardActions}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(item)}>
+          <Text style={styles.actionText}>تعديل ✏️</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F0F9FF' }]} onPress={() => onMsg(item)}>
+          <Text style={[styles.actionText, { color: '#0EA5E9' }]}>رسالة ✉️</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => onDelete(item.id)}>
+          <Text style={[styles.actionText, { color: '#EF4444' }]}>حذف 🗑️</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const FormSection = React.memo(({ 
+  editingSchoolId, pickImage, logoUrl, schoolName, setSchoolName, 
+  displayName, setDisplayName, googleMapsLink, setGoogleMapsLink, 
+  adminEmail, setAdminEmail, adminPassword, setAdminPassword, 
+  planType, setPlanType, handleSaveSchool, loading, resetForm 
+}) => (
+  <View style={styles.formCard}>
+    <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
+    
+    <View style={styles.logoSection}>
+      <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
+        {logoUrl ? (
+          <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
+        ) : (
+          <View style={styles.uploadPlaceholder}>
+            <Text style={{ fontSize: 30 }}>📸</Text>
+            <Text style={styles.uploadText}>رفع الشعار</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
+
+    <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
+    <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
+    <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
+    <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
+    <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
+
+    <Text style={styles.label}>اختر باقة الاشتراك:</Text>
+    <View style={styles.planContainer}>
+      {[
+        { id: '1', name: 'صغيرة (3)' },
+        { id: '2', name: 'متوسطة (7)' },
+        { id: '3', name: 'مفتوحة' }
+      ].map(plan => (
+        <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
+          <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+
+    <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
+      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
+    </TouchableOpacity>
+    {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
+  </View>
+));
+
+const ListHeader = React.memo(({ 
+  navigation, setShowPassModal, editingSchoolId, pickImage, logoUrl, 
+  schoolName, setSchoolName, displayName, setDisplayName, 
+  googleMapsLink, setGoogleMapsLink, adminEmail, setAdminEmail, 
+  adminPassword, setAdminPassword, planType, setPlanType, 
+  handleSaveSchool, loading, resetForm, filteredSchoolsCount, 
+  setShowMsgModal, setMsgTarget, searchQuery, setSearchQuery 
+}) => (
+  <View>
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
+      <View style={{ flexDirection: 'row' }}>
+        <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: '#F1F5F9', marginRight: 10 }]} onPress={() => setShowPassModal(true)}>
+          <Text style={[styles.logoutText, { color: '#64748B' }]}>كلمة السر 🔐</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
+          <Text style={styles.logoutText}>خروج</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+
+    <FormSection 
+      editingSchoolId={editingSchoolId} pickImage={pickImage} logoUrl={logoUrl} 
+      schoolName={schoolName} setSchoolName={setSchoolName} displayName={displayName} 
+      setDisplayName={setDisplayName} googleMapsLink={googleMapsLink} 
+      setGoogleMapsLink={setGoogleMapsLink} adminEmail={adminEmail} 
+      setAdminEmail={setAdminEmail} adminPassword={adminPassword} 
+      setAdminPassword={setAdminPassword} planType={planType} 
+      setPlanType={setPlanType} handleSaveSchool={handleSaveSchool} 
+      loading={loading} resetForm={resetForm}
+    />
+
+    <View style={styles.listSection}>
+      <View style={styles.listHeader}>
+        <Text style={styles.listTitle}>المدارس المسجلة ({filteredSchoolsCount})</Text>
+        <TouchableOpacity style={styles.broadcastBtn} onPress={() => { setMsgTarget(null); setShowMsgModal(true); }}>
+          <Text style={styles.broadcastText}>رسالة للجميع 📢</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <TextInput 
+        style={styles.searchInput} 
+        placeholder="بحث ذكي (اسم، بريد، عرض)..." 
+        value={searchQuery} 
+        onChangeText={setSearchQuery} 
+      />
+    </View>
+  </View>
+));
 
 export default function SuperAdminScreen({ navigation }) {
 
@@ -92,20 +230,20 @@ export default function SuperAdminScreen({ navigation }) {
     }
   }, [searchQuery, schools]);
 
-  const formatDate = (date) => {
+  const formatDate = useCallback((date) => {
     if (!date) return '';
     const d = new Date(date);
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-  };
+  }, []);
 
-  const checkSubscriptionStatus = (end) => {
+  const checkSubscriptionStatus = useCallback((end) => {
     if (!end) return { text: 'غير محدد', color: '#94A3B8' };
     const today = new Date();
     const expiry = new Date(end);
     return expiry > today ? { text: 'نشط ✅', color: '#10B981' } : { text: 'منتهي ❌', color: '#EF4444' };
-  };
+  }, []);
 
-  const getPlanLimits = (type) => {
+  const getPlanLimits = useCallback((type) => {
     switch (type) {
       case '1':
         return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى (3 باصات)' };
@@ -116,7 +254,7 @@ export default function SuperAdminScreen({ navigation }) {
       default:
         return { maxBuses: 3, maxStudents: 50, label: 'الباقة الصغرى' };
     }
-  };
+  }, []);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -249,12 +387,12 @@ export default function SuperAdminScreen({ navigation }) {
     }
   };
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setSchoolName(''); setDisplayName(''); setLogoUrl(''); setGoogleMapsLink('');
     setPlanType('1'); setAdminEmail(''); setAdminPassword('');
     setStartDate(new Date()); setEndDate(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
     setEditingSchoolId(null);
-  };
+  }, []);
 
   const handleEditPress = useCallback((school) => {
     setEditingSchoolId(school.id);
@@ -289,123 +427,6 @@ export default function SuperAdminScreen({ navigation }) {
     ]);
   }, [schools]);
 
-  // تحويل عنصر القائمة لمكون منفصل لتحسين الأداء
-  const SchoolItem = React.memo(({ item, onEdit, onMsg, onDelete, checkStatus, getLimits, format }) => {
-    const status = checkStatus(item.endDate);
-    const limits = getLimits(item.planType);
-    return (
-      <View style={styles.schoolCard}>
-        <View style={styles.cardHeader}>
-          {item.logoUrl ? (
-            <Image source={{ uri: item.logoUrl }} style={styles.cardLogo} />
-          ) : (
-            <View style={styles.logoPlaceholder}><Text>🏫</Text></View>
-          )}
-          <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={styles.schoolName}>{item.displayName || item.name}</Text>
-            <Text style={styles.schoolEmail}>{item.email}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
-            <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
-          </View>
-        </View>
-        <View style={styles.cardDetails}>
-          <Text style={styles.detailText}>📦 {limits.label}</Text>
-          <Text style={styles.detailText}>📅 ينتهي: {format(item.endDate)}</Text>
-        </View>
-        <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(item)}>
-            <Text style={styles.actionText}>تعديل ✏️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F0F9FF' }]} onPress={() => onMsg(item)}>
-            <Text style={[styles.actionText, { color: '#0EA5E9' }]}>رسالة ✉️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => onDelete(item.id)}>
-            <Text style={[styles.actionText, { color: '#EF4444' }]}>حذف 🗑️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  });
-
-  // فصل مكونات الواجهة لتحسين الأداء ومنع اختفاء لوحة المفاتيح
-  const FormSection = useCallback(() => (
-    <View style={styles.formCard}>
-      <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
-      
-      <View style={styles.logoSection}>
-        <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
-          {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
-          ) : (
-            <View style={styles.uploadPlaceholder}>
-              <Text style={{ fontSize: 30 }}>📸</Text>
-              <Text style={styles.uploadText}>رفع الشعار</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
-      <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
-      <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
-      <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
-      <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
-
-      <Text style={styles.label}>اختر باقة الاشتراك:</Text>
-      <View style={styles.planContainer}>
-        {[
-          { id: '1', name: 'صغيرة (3)' },
-          { id: '2', name: 'متوسطة (7)' },
-          { id: '3', name: 'مفتوحة' }
-        ].map(plan => (
-          <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
-            <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
-        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
-      </TouchableOpacity>
-      {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
-    </View>
-  ), [schoolName, displayName, logoUrl, googleMapsLink, planType, adminEmail, adminPassword, loading, editingSchoolId, pickImage, handleSaveSchool, resetForm]);
-
-  const ListHeader = useCallback(() => (
-    <View>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
-        <View style={{ flexDirection: 'row' }}>
-          <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: '#F1F5F9', marginRight: 10 }]} onPress={() => setShowPassModal(true)}>
-            <Text style={[styles.logoutText, { color: '#64748B' }]}>كلمة السر 🔐</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
-            <Text style={styles.logoutText}>خروج</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <FormSection />
-
-      <View style={styles.listSection}>
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>المدارس المسجلة ({filteredSchools.length})</Text>
-          <TouchableOpacity style={styles.broadcastBtn} onPress={() => { setMsgTarget(null); setShowMsgModal(true); }}>
-            <Text style={styles.broadcastText}>رسالة للجميع 📢</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <TextInput 
-          style={styles.searchInput} 
-          placeholder="بحث ذكي (اسم، بريد، عرض)..." 
-          value={searchQuery} 
-          onChangeText={setSearchQuery} 
-        />
-      </View>
-    </View>
-  ), [filteredSchools.length, searchQuery, FormSection, navigation]);
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
@@ -424,7 +445,35 @@ export default function SuperAdminScreen({ navigation }) {
             format={formatDate}
           />
         )}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={
+          <ListHeader 
+            navigation={navigation}
+            setShowPassModal={setShowPassModal}
+            editingSchoolId={editingSchoolId}
+            pickImage={pickImage}
+            logoUrl={logoUrl}
+            schoolName={schoolName}
+            setSchoolName={setSchoolName}
+            displayName={displayName}
+            setDisplayName={setDisplayName}
+            googleMapsLink={googleMapsLink}
+            setGoogleMapsLink={setGoogleMapsLink}
+            adminEmail={adminEmail}
+            setAdminEmail={setAdminEmail}
+            adminPassword={adminPassword}
+            setAdminPassword={setAdminPassword}
+            planType={planType}
+            setPlanType={setPlanType}
+            handleSaveSchool={handleSaveSchool}
+            loading={loading}
+            resetForm={resetForm}
+            filteredSchoolsCount={filteredSchools.length}
+            setShowMsgModal={setShowMsgModal}
+            setMsgTarget={setMsgTarget}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+          />
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
         initialNumToRender={5}
         maxToRenderPerBatch={10}
