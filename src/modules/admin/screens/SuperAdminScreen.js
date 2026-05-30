@@ -322,7 +322,8 @@ export default function SuperAdminScreen({ navigation }) {
       if (editingSchoolId) {
         await update(ref(db, `schools/${editingSchoolId}`), schoolData);
         await update(ref(db, `users/${safeUserKey}`), { ...schoolData, schoolId: editingSchoolId, username: adminEmail });
-        await update(ref(db, `userIndex/${safeUserKey}`), { schoolId: editingSchoolId, role: 'schoolAdmin' });
+        // نستخدم الدور 'school' في الفهرس ليتوافق مع منطق authService.js
+        await update(ref(db, `userIndex/${safeUserKey}`), { schoolId: editingSchoolId, role: 'school' });
         Alert.alert('نجاح', 'تم التحديث بنجاح');
       } else {
         const newSchoolId = await generateSchoolId();
@@ -332,7 +333,8 @@ export default function SuperAdminScreen({ navigation }) {
           await set(ref(db, `schools/${newSchoolId}/${branch}`), { _init: true });
         }
         await set(ref(db, `users/${safeUserKey}`), { ...schoolData, schoolId: newSchoolId, username: adminEmail });
-        await set(ref(db, `userIndex/${safeUserKey}`), { schoolId: newSchoolId, role: 'schoolAdmin' });
+        // نستخدم الدور 'school' في الفهرس ليتوافق مع منطق authService.js الذي يبحث عن 'school' ثم يحدد النوع
+        await set(ref(db, `userIndex/${safeUserKey}`), { schoolId: newSchoolId, role: 'school' });
         Alert.alert('نجاح', 'تمت الإضافة بنجاح');
       }
       resetForm();
