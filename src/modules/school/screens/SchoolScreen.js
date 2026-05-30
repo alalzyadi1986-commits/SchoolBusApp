@@ -24,6 +24,7 @@ import {
   deleteSchoolItem 
 } from '../services/schoolDataService';
 import { SchoolDataItem } from '../components/SchoolComponents';
+import { exportToExcel, exportToPDF } from '../services/exportService';
 
 export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
@@ -344,6 +345,39 @@ export default function SchoolScreen({ route, navigation }) {
         <Text style={[styles.cardSub, { color: isExpired ? '#EF4444' : '#10B981', fontWeight: 'bold' }]}>
           الحالة: {isExpired ? 'منتهي (يرجى التجديد)' : 'نشط'}
         </Text>
+      </View>
+
+      <View style={[styles.card, { flexDirection: 'column', alignItems: 'flex-end', marginTop: 10, marginBottom: 50 }]}>
+        <Text style={[styles.cardTitle, { marginBottom: 15 }]}>📥 تصدير البيانات</Text>
+        <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%' }}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#10B981', width: '45%' }]}
+            onPress={() => exportToExcel(students, `طلاب_${dynamicSchoolName}`)}
+          >
+            <Text style={styles.actionButtonText}>تصدير الطلاب (Excel)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#EF4444', width: '45%' }]}
+            onPress={() => exportToPDF(students, "قائمة الطلاب", dynamicSchoolName)}
+          >
+            <Text style={styles.actionButtonText}>تصدير الطلاب (PDF)</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%', marginTop: 10 }}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#3B82F6', width: '45%' }]}
+            onPress={() => exportToExcel(drivers, `سائقين_${dynamicSchoolName}`)}
+          >
+            <Text style={styles.actionButtonText}>تصدير السائقين (Excel)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#8B5CF6', width: '45%' }]}
+            onPress={() => exportToPDF(drivers, "قائمة السائقين", dynamicSchoolName)}
+          >
+            <Text style={styles.actionButtonText}>تصدير السائقين (PDF)</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
