@@ -63,15 +63,31 @@ export const exportToExcel = async (data, type, schoolName, userName) => {
       [],
     ];
 
-    const ws = XLSX.utils.aoa_to_sheet(headerInfo);
-    XLSX.utils.sheet_add_json(ws, formattedData, { origin: 'A6', skipHeader: false });
-    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    // تحسين بناء الورقة لضمان ظهور البيانات
+    const ws = XLSX.utils.json_to_sheet(formattedData, { origin: 'A6' });
+    
+    // إضافة معلومات الترويسة في البداية
+    XLSX.utils.sheet_add_aoa(ws, headerInfo, { origin: 'A1' });
+
+    // ضبط عرض الأعمدة تلقائياً
+    const colWidths = Object.keys(formattedData[0] || {}).map(() => ({ wch: 20 }));
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, "التقرير");
 
     // إنشاء اسم ملف احترافي
     const safeSchoolName = schoolName.replace(/[<>:"/\\|?*]/g, '');
     const fileName = `${safeSchoolName}_${type}_${userName}_${getFormattedDateTime()}.xlsx`.replace(/\s+/g, '_');
     
-    const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+    const wbout = XLSX.write(wb, { 
+      type: 'base64', 
+      bookType: 'xlsx',
+      Props: {
+        Title: type,
+        Author: userName,
+        Language: "ar-SA"
+      }
+    });
     const uri = `${FileSystem.cacheDirectory}${fileName}`;
 
     await FileSystem.writeAsStringAsync(uri, wbout, {
