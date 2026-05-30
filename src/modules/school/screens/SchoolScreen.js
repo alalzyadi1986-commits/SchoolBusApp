@@ -449,6 +449,14 @@ export default function SchoolScreen({ route, navigation }) {
       </View>
 
       <View style={styles.quickActions}>
+        {(isMainAdmin || (isSubManager && userPermissions.view_active_trips)) && (
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#1E293B' }]} 
+            onPress={() => navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName })}
+          >
+            <Text style={styles.actionButtonText}>📡 مراقبة حية</Text>
+          </TouchableOpacity>
+        )}
         {(isMainAdmin || (isSubManager && userPermissions.send_broadcasts)) && (
           <TouchableOpacity style={styles.actionButton} onPress={() => setShowBroadcastModal(true)}>
             <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
