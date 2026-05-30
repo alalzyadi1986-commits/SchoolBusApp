@@ -8,7 +8,9 @@ export const subscribeToSchoolData = (schoolId, path, callback) => {
   const dataRef = ref(db, `schools/${schoolId}/${path}`);
   return onValue(dataRef, (snap) => {
     const data = snap.val();
-    const list = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
+    const list = data ? Object.keys(data)
+      .filter(key => key !== '_init') // تجاهل ملف التهيئة لضمان دقة العد في الباقات
+      .map(key => ({ id: key, ...data[key] })) : [];
     callback(list);
   });
 };
