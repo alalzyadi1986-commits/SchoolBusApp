@@ -25,28 +25,30 @@ export const loginUser = async (username, password) => {
     const { schoolId, role } = indexData;
 
     // 3. جلب البيانات من المسار المناسب
-    let userPath = `schools/${schoolId}/${role}s/${safeKey}`;
-    
+    let userPath;
+    let actualRole = role; // الدور الفعلي للمستخدم
+
     if (role === 'school') {
-      // إذا كان مديراً فرعياً، نبحث عنه في مجلد المدارس أولاً
+      // التحقق مما إذا كان المستخدم مديراً فرعياً
       const managerSnap = await get(ref(db, `schools/${schoolId}/managers/${safeKey}`));
       if (managerSnap.exists()) {
         userPath = `schools/${schoolId}/managers/${safeKey}`;
+        actualRole = 'subManager'; // تحديد الدور كمدير فرعي
       } else {
+        // إذا لم يكن مديراً فرعياً، فهو المدير الرئيسي للمدرسة
         userPath = `users/${safeKey}`;
+        actualRole = 'schoolAdmin'; // تحديد الدور كمدير مدرسة رئيسي
       }
+    } else {
+      // للمستخدمين الآخرين (سائق، ولي أمر، إلخ)
+      userPath = `schools/${schoolId}/${role}s/${safeKey}`;
     }
-    else if (role === 'staff') userPath = `schools/${schoolId}/staff/${safeKey}`;
-    else if (role === 'driver') userPath = `schools/${schoolId}/drivers/${safeKey}`;
-    else if (role === 'parent') userPath = `schools/${schoolId}/parents/${safeKey}`;
-    else if (role === 'student') userPath = `schools/${schoolId}/students/${safeKey}`;
-    else if (role === 'manager') userPath = `schools/${schoolId}/managers/${safeKey}`;
 
     const userSnap = await get(ref(db, userPath));
     const userData = userSnap.val();
 
     if (userData && userData.password === password) {
-      return { ...userData, schoolId, role, username: safeKey };
+      return { ...userData, schoolId, role: actualRole, username: safeKey };
     }
 
     return null;

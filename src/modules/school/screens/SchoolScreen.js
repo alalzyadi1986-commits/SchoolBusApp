@@ -28,7 +28,8 @@ export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
   
   // تحديد هل المستخدم هو المدير الرئيسي أم مدير فرعي
-  const isMainAdmin = user?.role === 'school';
+  const isMainAdmin = user?.role === 'schoolAdmin';
+  const isSubManager = user?.role === 'subManager';
   const userPermissions = user?.permissions || {};
 
   const [activeTab, setActiveTab] = useState('drivers');
@@ -68,7 +69,11 @@ export default function SchoolScreen({ route, navigation }) {
     { id: 'send_broadcasts', label: 'إرسال رسائل جماعية' },
     { id: 'view_reports', label: 'مشاهدة التقارير' },
     { id: 'handle_emergencies', label: 'استقبال حالات الطوارئ' },
-    { id: 'view_complaints', label: 'استقبال الشكاوي' }
+    { id: 'view_complaints', label: 'استقبال الشكاوي' },
+    { id: 'view_buses', label: 'مشاهدة الباصات' },
+    { id: 'view_active_trips', label: 'مشاهدة الرحلات النشطة' },
+    { id: 'edit_items', label: 'تعديل العناصر' },
+    { id: 'delete_items', label: 'حذف العناصر' }
   ];
 
   useEffect(() => {
@@ -114,7 +119,9 @@ export default function SchoolScreen({ route, navigation }) {
   // فحص الصلاحيات للتبويبات
   const canViewTab = (tabId) => {
     if (isMainAdmin) return true;
-    if (tabId === 'drivers' || tabId === 'managers') return false; // السائقين والمدراء للمدير الرئيسي فقط
+    if (isSubManager) {
+      if (tabId === 'drivers' || tabId === 'managers') return false; // السائقين والمدراء للمدير الرئيسي فقط
+    }
     if (tabId === 'staff') return userPermissions.manage_staff;
     if (tabId === 'parents' || tabId === 'students') return userPermissions.manage_students;
     if (tabId === 'reports') return userPermissions.view_reports;
@@ -272,7 +279,7 @@ export default function SchoolScreen({ route, navigation }) {
 
       {/* لوحة الإحصائيات الذكية - تظهر للجميع ولكن ببيانات حسب الصلاحية */}
       <View style={styles.statsContainer}>
-        {isMainAdmin && (
+        {(isMainAdmin || (isSubManager && userPermissions.view_buses)) && (
           <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
             <Text style={styles.statValue}>{stats.buses}</Text>
             <Text style={styles.statLabel}>باصات</Text>
@@ -284,7 +291,7 @@ export default function SchoolScreen({ route, navigation }) {
             <Text style={styles.statLabel}>طلاب</Text>
           </View>
         )}
-        {isMainAdmin && (
+        {(isMainAdmin || (isSubManager && userPermissions.view_active_trips)) && (
           <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
             <Text style={styles.statValue}>{stats.activeTrips}</Text>
             <Text style={styles.statLabel}>رحلات نشطة</Text>
@@ -302,12 +309,12 @@ export default function SchoolScreen({ route, navigation }) {
       </View>
 
       <View style={styles.quickActions}>
-        {(isMainAdmin || userPermissions.send_broadcasts) && (
+        {(isMainAdmin || (isSubManager && userPermissions.send_broadcasts)) && (
           <TouchableOpacity style={styles.actionButton} onPress={() => setShowBroadcastModal(true)}>
             <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
           </TouchableOpacity>
         )}
-        {isMainAdmin && adminMessages.length > 0 && (
+        {(isMainAdmin || (isSubManager && userPermissions.view_admin_messages)) && adminMessages.length > 0 && (
           <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#3B82F6' }]} onPress={() => setShowMsgModal(true)}>
             <Text style={styles.actionButtonText}>رسائل الإدارة ({adminMessages.length}) ✉️</Text>
           </TouchableOpacity>
@@ -317,8 +324,13 @@ export default function SchoolScreen({ route, navigation }) {
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
           {[
-            { id: 'drivers', label: 'السائقين' }, { id: 'staff', label: 'المرافقات' }, { id: 'parents', label: 'أولياء الأمور' },
-            { id: 'students', label: 'الطلاب' }, { id: 'managers', label: 'المدراء' }, { id: 'reports', label: 'التقارير' }, { id: 'emergencies', label: 'الطوارئ' },
+            { id: 'drivers', label: 'السائقين' },
+            { id: 'staff', label: 'المرافقات' },
+            { id: 'parents', label: 'أولياء الأمور' },
+            { id: 'students', label: 'الطلاب' },
+            { id: 'managers', label: 'المدراء' },
+            { id: 'reports', label: 'التقارير' },
+            { id: 'emergencies', label: 'الطوارئ' },
           ].filter(tab => canViewTab(tab.id)).map(tab => (
             <TouchableOpacity key={tab.id} style={[styles.tab, activeTab === tab.id && styles.tabActive]} onPress={() => { setActiveTab(tab.id); setShowForm(false); }}>
               <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
@@ -338,12 +350,16 @@ export default function SchoolScreen({ route, navigation }) {
         renderItem={({ item }) => (
           <View style={[styles.card, activeTab === 'emergencies' && !item.resolved && { borderColor: '#EF4444', borderWidth: 1 }]}>
             <View style={styles.cardActions}>
+              {(isMainAdmin || (isSubManager && userPermissions.edit_items)) && (
               <TouchableOpacity style={styles.editBtn} onPress={() => { setFormData(item); setEditingId(item.id); setShowForm(true); }}>
                 <Text style={styles.editBtnText}>تعديل</Text>
               </TouchableOpacity>
+            )}
+            {(isMainAdmin || (isSubManager && userPermissions.delete_items)) && (
               <TouchableOpacity style={styles.deleteBtn} onPress={() => handleAction('delete', item)}>
                 <Text style={styles.deleteBtnText}>حذف</Text>
               </TouchableOpacity>
+            )}
             </View>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <Text style={styles.cardTitle}>{item.name}</Text>
