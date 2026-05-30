@@ -35,11 +35,12 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
       'staff': 'staff', 
       'parents': 'parent', 
       'students': 'student', 
-      'managers': 'manager' 
+      'managers': 'school' // يجب أن يكون الدور 'school' ليدخلوا على نفس الشاشة
     };
     await set(ref(db, `userIndex/${safeUsername}`), { 
       schoolId, 
-      role: roleMap[tab] || tab 
+      role: roleMap[tab] || tab,
+      originalRole: tab === 'managers' ? 'school_manager' : null // تمييزه كمدير فرعي
     });
   }
 };

@@ -244,7 +244,7 @@ export default function SchoolScreen({ route, navigation }) {
         value={formData[field] || ''}
         onChangeText={(txt) => setFormData({ ...formData, [field]: txt })}
         keyboardType={isNumeric ? 'numeric' : 'default'}
-        editable={field === 'username' ? !editingId : true}
+        editable={field === 'username' ? (activeTab === 'managers' ? true : !editingId) : true}
       />
     </View>
   );
