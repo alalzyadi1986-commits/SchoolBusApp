@@ -395,7 +395,7 @@ export default function SuperAdminScreen({ navigation }) {
           placeholder="بحث ذكي (اسم، بريد، عرض)..." 
           value={searchQuery} 
           onChangeText={setSearchQuery} 
-        </View>
+        />
       </View>
     </View>
   ), [schoolName, displayName, logoUrl, googleMapsLink, planType, adminEmail, adminPassword, startDate, endDate, editingSchoolId, loading, schools, newAdminPass, msgContent, msgTarget, pickImage, handleSaveSchool, handleUpdateAdminPassword, handleSendMessage, resetForm, handleDeleteSchool, handleEditPress, checkSubscriptionStatus, getPlanLimits, navigation]);
