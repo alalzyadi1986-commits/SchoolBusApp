@@ -289,9 +289,10 @@ export default function SuperAdminScreen({ navigation }) {
     ]);
   }, [schools]);
 
-  const renderSchoolItem = ({ item }) => {
-    const status = checkSubscriptionStatus(item.endDate);
-    const limits = getPlanLimits(item.planType);
+  // تحويل عنصر القائمة لمكون منفصل لتحسين الأداء
+  const SchoolItem = React.memo(({ item, onEdit, onMsg, onDelete, checkStatus, getLimits, format }) => {
+    const status = checkStatus(item.endDate);
+    const limits = getLimits(item.planType);
     return (
       <View style={styles.schoolCard}>
         <View style={styles.cardHeader}>
@@ -310,24 +311,68 @@ export default function SuperAdminScreen({ navigation }) {
         </View>
         <View style={styles.cardDetails}>
           <Text style={styles.detailText}>📦 {limits.label}</Text>
-          <Text style={styles.detailText}>📅 ينتهي: {formatDate(item.endDate)}</Text>
+          <Text style={styles.detailText}>📅 ينتهي: {format(item.endDate)}</Text>
         </View>
         <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => handleEditPress(item)}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(item)}>
             <Text style={styles.actionText}>تعديل ✏️</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F0F9FF' }]} onPress={() => { setMsgTarget(item); setShowMsgModal(true); }}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F0F9FF' }]} onPress={() => onMsg(item)}>
             <Text style={[styles.actionText, { color: '#0EA5E9' }]}>رسالة ✉️</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => handleDeleteSchool(item.id)}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => onDelete(item.id)}>
             <Text style={[styles.actionText, { color: '#EF4444' }]}>حذف 🗑️</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
-  };
+  });
 
-  const renderHeader = useCallback(() => (
+  // فصل مكونات الواجهة لتحسين الأداء ومنع اختفاء لوحة المفاتيح
+  const FormSection = useCallback(() => (
+    <View style={styles.formCard}>
+      <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
+      
+      <View style={styles.logoSection}>
+        <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
+          ) : (
+            <View style={styles.uploadPlaceholder}>
+              <Text style={{ fontSize: 30 }}>📸</Text>
+              <Text style={styles.uploadText}>رفع الشعار</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
+      <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
+      <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
+      <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
+      <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
+
+      <Text style={styles.label}>اختر باقة الاشتراك:</Text>
+      <View style={styles.planContainer}>
+        {[
+          { id: '1', name: 'صغيرة (3)' },
+          { id: '2', name: 'متوسطة (7)' },
+          { id: '3', name: 'مفتوحة' }
+        ].map(plan => (
+          <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
+            <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
+        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
+      </TouchableOpacity>
+      {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
+    </View>
+  ), [schoolName, displayName, logoUrl, googleMapsLink, planType, adminEmail, adminPassword, loading, editingSchoolId, pickImage, handleSaveSchool, resetForm]);
+
+  const ListHeader = useCallback(() => (
     <View>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
@@ -341,46 +386,7 @@ export default function SuperAdminScreen({ navigation }) {
         </View>
       </View>
 
-      <View style={styles.formCard}>
-        <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
-        
-        <View style={styles.logoSection}>
-          <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
-            {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
-            ) : (
-              <View style={styles.uploadPlaceholder}>
-                <Text style={{ fontSize: 30 }}>📸</Text>
-                <Text style={styles.uploadText}>رفع الشعار</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
-        <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
-        <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
-        <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
-        <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
-
-        <Text style={styles.label}>اختر باقة الاشتراك:</Text>
-        <View style={styles.planContainer}>
-          {[
-            { id: '1', name: 'صغيرة (3)' },
-            { id: '2', name: 'متوسطة (7)' },
-            { id: '3', name: 'مفتوحة' }
-          ].map(plan => (
-            <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
-              <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
-          {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
-        </TouchableOpacity>
-        {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
-      </View>
+      <FormSection />
 
       <View style={styles.listSection}>
         <View style={styles.listHeader}>
@@ -398,7 +404,7 @@ export default function SuperAdminScreen({ navigation }) {
         />
       </View>
     </View>
-  ), [schoolName, displayName, logoUrl, googleMapsLink, planType, adminEmail, adminPassword, startDate, endDate, editingSchoolId, loading, schools, newAdminPass, msgContent, msgTarget, pickImage, handleSaveSchool, handleUpdateAdminPassword, handleSendMessage, resetForm, handleDeleteSchool, handleEditPress, checkSubscriptionStatus, getPlanLimits, navigation]);
+  ), [filteredSchools.length, searchQuery, FormSection, navigation]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -407,8 +413,18 @@ export default function SuperAdminScreen({ navigation }) {
       <FlatList
         data={filteredSchools}
         keyExtractor={item => item.id}
-        renderItem={renderSchoolItem}
-        ListHeaderComponent={renderHeader}
+        renderItem={({ item }) => (
+          <SchoolItem 
+            item={item} 
+            onEdit={handleEditPress} 
+            onMsg={(school) => { setMsgTarget(school); setShowMsgModal(true); }} 
+            onDelete={handleDeleteSchool}
+            checkStatus={checkSubscriptionStatus}
+            getLimits={getPlanLimits}
+            format={formatDate}
+          />
+        )}
+        ListHeaderComponent={ListHeader}
         contentContainerStyle={{ paddingBottom: 100 }}
         initialNumToRender={5}
         maxToRenderPerBatch={10}
