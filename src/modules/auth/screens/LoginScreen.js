@@ -112,7 +112,15 @@ export default function LoginScreen() {
         }
 
         await saveUserSession(userData);
-        const screens = { superadmin: 'SuperAdminScreen', school: 'SchoolScreen', driver: 'DriverScreen', staff: 'StaffScreen', parent: 'ParentScreen' };
+        const screens = { 
+          superadmin: 'SuperAdminScreen', 
+          school: 'SchoolScreen', 
+          schoolAdmin: 'SchoolScreen', 
+          subManager: 'SchoolScreen', 
+          driver: 'DriverScreen', 
+          staff: 'StaffScreen', 
+          parent: 'ParentScreen' 
+        };
         navigation.replace(screens[userData.role] || 'Login', { user: userData, schoolId: userData.schoolId });
       } else {
         Alert.alert('❌', language === 'ar' ? 'بيانات غير صحيحة' : 'Invalid credentials');

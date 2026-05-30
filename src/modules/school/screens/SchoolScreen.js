@@ -30,9 +30,9 @@ export default function SchoolScreen({ route, navigation }) {
   // تحديد هل المستخدم هو المدير الرئيسي أم مدير فرعي
   const isMainAdmin = user?.role === 'schoolAdmin';
   const isSubManager = user?.role === 'subManager';
-  const userPermissions = user?.permissions || {};
+  const userPermissions = useMemo(() => user?.permissions || {}, [user]);
 
-  const [activeTab, setActiveTab] = useState('drivers');
+  const [activeTab, setActiveTab] = useState('');
   const [loading, setLoading] = useState(true);
   const [expiryDate, setExpiryDate] = useState('');
   const [isExpired, setIsExpired] = useState(false);
@@ -77,7 +77,7 @@ export default function SchoolScreen({ route, navigation }) {
   ];
 
   useEffect(() => {
-    if (!schoolId) {
+    if (!schoolId || !user) {
       setLoading(false);
       navigation.replace('Login');
       return;
@@ -109,23 +109,43 @@ export default function SchoolScreen({ route, navigation }) {
       })
     ];
 
+    // تحديد التبويب الافتراضي بناءً على الصلاحيات للمدير الفرعي
+    if (isSubManager) {
+      const availableTabs = [
+        { id: 'staff', perm: 'manage_staff' },
+        { id: 'students', perm: 'manage_students' },
+        { id: 'reports', perm: 'view_reports' },
+        { id: 'emergencies', perm: 'handle_emergencies' }
+      ];
+      const firstTab = availableTabs.find(t => userPermissions[t.perm])?.id || 'students';
+      setActiveTab(firstTab);
+    } else {
+      setActiveTab('drivers');
+    }
+
     setLoading(false);
     return () => {
       schoolUnsub();
       unsubs.forEach(u => u());
     };
-  }, [schoolId]);
+  }, [schoolId, isSubManager, userPermissions]);
 
   // فحص الصلاحيات للتبويبات
   const canViewTab = (tabId) => {
     if (isMainAdmin) return true;
     if (isSubManager) {
-      if (tabId === 'drivers' || tabId === 'managers') return false; // السائقين والمدراء للمدير الرئيسي فقط
+      // السائقين والمدراء متاحين فقط للمدير الرئيسي افتراضياً، إلا إذا تم تعديل ذلك لاحقاً
+      if (tabId === 'drivers' || tabId === 'managers') return false; 
+      
+      // التحقق من الصلاحيات المخصصة للمدير الفرعي مع حماية من القيم غير المعرفة
+      if (tabId === 'staff') return !!userPermissions?.manage_staff;
+      if (tabId === 'parents' || tabId === 'students') return !!userPermissions?.manage_students;
+      if (tabId === 'reports') return !!userPermissions?.view_reports;
+      if (tabId === 'emergencies') return !!userPermissions?.handle_emergencies;
+      
+      // تبويب افتراضي قد يحتاجه المدير الفرعي إذا لم يكن هناك قيود
+      return false;
     }
-    if (tabId === 'staff') return userPermissions.manage_staff;
-    if (tabId === 'parents' || tabId === 'students') return userPermissions.manage_students;
-    if (tabId === 'reports') return userPermissions.view_reports;
-    if (tabId === 'emergencies') return userPermissions.handle_emergencies;
     return false;
   };
 
@@ -362,8 +382,8 @@ export default function SchoolScreen({ route, navigation }) {
             )}
             </View>
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardSub}>{item.username || item.id}</Text>
+              <Text style={styles.cardTitle}>{item.displayName || item.name || 'بدون اسم'}</Text>
+              <Text style={styles.cardSub}>{item.username || item.id || '---'}</Text>
               {activeTab === 'managers' && item.permissions && (
                 <Text style={styles.permsSummary}>
                   الصلاحيات: {Object.keys(item.permissions).filter(k => item.permissions[k]).length}
