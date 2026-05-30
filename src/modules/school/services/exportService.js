@@ -1,6 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
 import XLSX from 'xlsx';
 
@@ -69,14 +69,13 @@ export const exportToExcel = async (data, type, schoolName, userName) => {
 
     // إنشاء اسم ملف احترافي
     const safeSchoolName = schoolName.replace(/[<>:"/\\|?*]/g, '');
-    const fileName = `${safeSchoolName} - ${type} - ${userName} - ${getFormattedDateTime()}.xlsx`;
+    const fileName = `${safeSchoolName}_${type}_${userName}_${getFormattedDateTime()}.xlsx`.replace(/\s+/g, '_');
     
     const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-    const uri = FileSystem.cacheDirectory + fileName;
+    const uri = `${FileSystem.cacheDirectory}${fileName}`;
 
-    // تصحيح الوصول لـ EncodingType في الإصدار الجديد
     await FileSystem.writeAsStringAsync(uri, wbout, {
-      encoding: 'base64'
+      encoding: FileSystem.EncodingType.Base64
     });
 
     if (await Sharing.isAvailableAsync()) {
@@ -152,24 +151,19 @@ export const exportToPDF = async (data, type, schoolName, userName) => {
       </html>
     `;
 
-    const safeSchoolName = schoolName.replace(/[<>:"/\\|?*]/g, '');
-    const fileName = `${safeSchoolName} - ${type} - ${userName} - ${getFormattedDateTime()}.pdf`;
-    
     const { uri } = await Print.printToFileAsync({ html: htmlContent });
     
-    // استخدام الطريقة المتوافقة مع SDK 54 لنقل الملفات
-    const newUri = FileSystem.cacheDirectory + fileName;
+    const safeSchoolName = schoolName.replace(/[<>:"/\\|?*]/g, '');
+    const fileName = `${safeSchoolName}_${type}_${userName}_${getFormattedDateTime()}.pdf`.replace(/\s+/g, '_');
+    const newUri = `${FileSystem.cacheDirectory}${fileName}`;
     
-    try {
-      // محاولة استخدام الطريقة التقليدية أولاً مع تصحيح الاستدعاء
-      await FileSystem.copyAsync({ from: uri, to: newUri });
-    } catch (e) {
-      // إذا فشلت، نستخدم المسار المباشر
-      console.log("Fallback to direct URI");
-    }
+    await FileSystem.copyAsync({
+      from: uri,
+      to: newUri
+    });
 
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(newUri || uri, {
+      await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
         dialogTitle: `تصدير ${type}`,
         UTI: 'com.adobe.pdf'
