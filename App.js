@@ -9,6 +9,7 @@ import SchoolScreen from './src/modules/school/screens/SchoolScreen';
 import DriverScreen from './src/modules/driver/screens/DriverScreen';
 import StaffScreen from './src/modules/staff/screens/StaffScreen';
 import ParentScreen from './src/modules/parent/screens/ParentScreen';
+import ActiveTripsScreen from './src/modules/school/screens/ActiveTripsScreen';
 
 const Stack = createStackNavigator();
 
@@ -27,6 +28,7 @@ export default function App() {
         <Stack.Screen name="DriverScreen" component={DriverScreen} />
         <Stack.Screen name="StaffScreen" component={StaffScreen} />
         <Stack.Screen name="ParentScreen" component={ParentScreen} />
+        <Stack.Screen name="ActiveTrips" component={ActiveTripsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
