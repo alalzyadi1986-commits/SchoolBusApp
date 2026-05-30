@@ -130,6 +130,22 @@ export default function SchoolScreen({ route, navigation }) {
     };
   }, [schoolId, isSubManager, userPermissions]);
 
+  // مراقبة حالات الطوارئ الجديدة لإظهار تنبيه فوري
+  useEffect(() => {
+    const activeEmergencies = emergencies.filter(e => !e.resolved);
+    if (activeEmergencies.length > 0) {
+      const latest = activeEmergencies[activeEmergencies.length - 1];
+      // إظهار تنبيه فقط إذا كان المدير يملك الصلاحية
+      if (isMainAdmin || userPermissions.handle_emergencies) {
+        Alert.alert(
+          '⚠️ حالة طوارئ نشطة',
+          `تنبيه من: ${latest.driverName || 'سائق'}\nالنوع: ${latest.type}\nيرجى مراجعة تبويب الطوارئ فوراً.`,
+          [{ text: 'مشاهدة الآن', onPress: () => setActiveTab('emergencies') }, { text: 'حسناً' }]
+        );
+      }
+    }
+  }, [emergencies.length]);
+
   // فحص الصلاحيات للتبويبات
   const canViewTab = (tabId) => {
     if (isMainAdmin) return true;
@@ -290,6 +306,34 @@ export default function SchoolScreen({ route, navigation }) {
         <View style={styles.reportRow}><Text style={styles.reportValue}>{stats.staff}</Text><Text style={styles.reportLabel}>إجمالي المرافقات:</Text></View>
         <View style={styles.reportRow}><Text style={styles.reportValue}>{stats.parents}</Text><Text style={styles.reportLabel}>إجمالي أولياء الأمور:</Text></View>
         <View style={styles.reportRow}><Text style={[styles.reportValue, { color: '#EF4444' }]}>{stats.emergencies}</Text><Text style={styles.reportLabel}>طوارئ لم تُحل:</Text></View>
+      </View>
+
+      <View style={[styles.card, { flexDirection: 'column', alignItems: 'flex-end', marginTop: 10 }]}>
+        <Text style={[styles.cardTitle, { marginBottom: 10 }]}>🚍 الرحلات النشطة حالياً ({stats.activeTrips})</Text>
+        {drivers.filter(d => d.isOnline).length > 0 ? (
+          drivers.filter(d => d.isOnline).map(d => (
+            <View key={d.id} style={styles.reportRow}>
+              <TouchableOpacity 
+                style={styles.editBtn} 
+                onPress={() => {
+                  if (d.location) {
+                    Alert.alert('موقع الحافلة', `خط العرض: ${d.location.latitude}\nخط الطول: ${d.location.longitude}`);
+                  } else {
+                    Alert.alert('تنبيه', 'الموقع غير متاح حالياً');
+                  }
+                }}
+              >
+                <Text style={styles.editBtnText}>تتبع</Text>
+              </TouchableOpacity>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{d.name}</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>لوحة: {d.busPlate || '---'}</Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 5 }}>لا توجد رحلات جارية الآن</Text>
+        )}
       </View>
       
       <View style={[styles.card, { flexDirection: 'column', alignItems: 'flex-end', marginTop: 10 }]}>
