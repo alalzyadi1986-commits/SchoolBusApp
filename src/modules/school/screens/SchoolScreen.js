@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -23,6 +23,7 @@ import {
   saveSchoolItem, 
   deleteSchoolItem 
 } from '../services/schoolDataService';
+import { SchoolDataItem } from '../components/SchoolComponents';
 
 export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
