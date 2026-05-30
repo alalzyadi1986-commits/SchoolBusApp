@@ -177,14 +177,14 @@ export default function SuperAdminScreen({ navigation }) {
         password: adminPassword,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        role: 'school',
+        role: 'schoolAdmin',
       };
       const safeUserKey = adminEmail.replace(/\./g, ',');
 
       if (editingSchoolId) {
         await update(ref(db, `schools/${editingSchoolId}`), schoolData);
         await update(ref(db, `users/${safeUserKey}`), { ...schoolData, schoolId: editingSchoolId, username: adminEmail });
-        await update(ref(db, `userIndex/${safeUserKey}`), { schoolId: editingSchoolId, role: 'school' });
+        await update(ref(db, `userIndex/${safeUserKey}`), { schoolId: editingSchoolId, role: 'schoolAdmin' });
         Alert.alert('نجاح', 'تم التحديث بنجاح');
       } else {
         const newSchoolId = await generateSchoolId();
@@ -194,7 +194,7 @@ export default function SuperAdminScreen({ navigation }) {
           await set(ref(db, `schools/${newSchoolId}/${branch}`), { _init: true });
         }
         await set(ref(db, `users/${safeUserKey}`), { ...schoolData, schoolId: newSchoolId, username: adminEmail });
-        await set(ref(db, `userIndex/${safeUserKey}`), { schoolId: newSchoolId, role: 'school' });
+        await set(ref(db, `userIndex/${safeUserKey}`), { schoolId: newSchoolId, role: 'schoolAdmin' });
         Alert.alert('نجاح', 'تمت الإضافة بنجاح');
       }
       resetForm();
@@ -327,7 +327,7 @@ export default function SuperAdminScreen({ navigation }) {
     );
   };
 
-  const renderHeader = () => (
+  const renderHeader = useCallback(() => (
     <View>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
@@ -395,10 +395,10 @@ export default function SuperAdminScreen({ navigation }) {
           placeholder="بحث ذكي (اسم، بريد، عرض)..." 
           value={searchQuery} 
           onChangeText={setSearchQuery} 
-        />
+        </View>
       </View>
     </View>
-  );
+  ), [schoolName, displayName, logoUrl, googleMapsLink, planType, adminEmail, adminPassword, startDate, endDate, editingSchoolId, loading, schools, newAdminPass, msgContent, msgTarget, pickImage, handleSaveSchool, handleUpdateAdminPassword, handleSendMessage, resetForm, handleDeleteSchool, handleEditPress, checkSubscriptionStatus, getPlanLimits, navigation]);
 
   return (
     <SafeAreaView style={styles.container}>
