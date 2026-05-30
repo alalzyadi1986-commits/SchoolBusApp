@@ -352,13 +352,13 @@ export default function SchoolScreen({ route, navigation }) {
         <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%' }}>
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#10B981', width: '45%' }]}
-            onPress={() => exportToExcel(students, `طلاب_${dynamicSchoolName}`)}
+            onPress={() => exportToExcel(students, "جدول الطلاب", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير الطلاب (Excel)</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#EF4444', width: '45%' }]}
-            onPress={() => exportToPDF(students, "قائمة الطلاب", dynamicSchoolName)}
+            onPress={() => exportToPDF(students, "جدول الطلاب", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير الطلاب (PDF)</Text>
           </TouchableOpacity>
@@ -367,13 +367,13 @@ export default function SchoolScreen({ route, navigation }) {
         <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%', marginTop: 10 }}>
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#3B82F6', width: '45%' }]}
-            onPress={() => exportToExcel(drivers, `سائقين_${dynamicSchoolName}`)}
+            onPress={() => exportToExcel(drivers, "جدول السائقين", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير السائقين (Excel)</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#8B5CF6', width: '45%' }]}
-            onPress={() => exportToPDF(drivers, "قائمة السائقين", dynamicSchoolName)}
+            onPress={() => exportToPDF(drivers, "جدول السائقين", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير السائقين (PDF)</Text>
           </TouchableOpacity>
