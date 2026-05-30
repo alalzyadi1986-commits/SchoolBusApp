@@ -23,12 +23,13 @@ export const subscribeToSchoolInfo = (schoolId, callback) => {
 };
 
 export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
-  const path = `schools/${schoolId}/${tab}`;
-  const safeUsername = formData.username?.replace(/\./g, ',');
-  
-  if (editingId) {
-    await update(ref(db, `${path}/${editingId}`), formData);
-  } else {
+  try {
+    const path = `schools/${schoolId}/${tab}`;
+    const safeUsername = formData.username?.trim().replace(/\./g, ',');
+    
+    if (editingId) {
+      await update(ref(db, `${path}/${editingId}`), formData);
+    } else {
     await set(ref(db, `${path}/${safeUsername}`), { ...formData, id: safeUsername });
     const roleMap = { 
       'drivers': 'driver', 
@@ -44,12 +45,16 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
     });
 
     // إضافة بيانات المستخدم في جدول users العام مع ربطه بالمدرسة لضمان الخصوصية
-    await set(ref(db, `users/${safeUsername}`), {
-      ...formData,
-      schoolId,
-      role: roleMap[tab] || tab,
-      id: safeUsername
-    });
+      await set(ref(db, `users/${safeUsername}`), {
+        ...formData,
+        schoolId,
+        role: roleMap[tab] || tab,
+        id: safeUsername
+      });
+    }
+  } catch (error) {
+    console.error("Save School Item Error:", error);
+    throw error;
   }
 };
 
