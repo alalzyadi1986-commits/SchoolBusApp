@@ -27,7 +27,15 @@ export const loginUser = async (username, password) => {
     // 3. جلب البيانات من المسار المناسب
     let userPath = `schools/${schoolId}/${role}s/${safeKey}`;
     
-    if (role === 'school') userPath = `users/${safeKey}`;
+    if (role === 'school') {
+      // إذا كان مديراً فرعياً، نبحث عنه في مجلد المدارس أولاً
+      const managerSnap = await get(ref(db, `schools/${schoolId}/managers/${safeKey}`));
+      if (managerSnap.exists()) {
+        userPath = `schools/${schoolId}/managers/${safeKey}`;
+      } else {
+        userPath = `users/${safeKey}`;
+      }
+    }
     else if (role === 'staff') userPath = `schools/${schoolId}/staff/${safeKey}`;
     else if (role === 'driver') userPath = `schools/${schoolId}/drivers/${safeKey}`;
     else if (role === 'parent') userPath = `schools/${schoolId}/parents/${safeKey}`;
