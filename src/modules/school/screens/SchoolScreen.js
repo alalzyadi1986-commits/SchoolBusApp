@@ -156,19 +156,36 @@ export default function SchoolScreen({ route, navigation }) {
     }
 
     if (action === 'delete' && item) {
-      Alert.alert('حذف', 'هل أنت متأكد؟', [
+      Alert.alert('إدارة العنصر', 'اختر الإجراء المطلوب:', [
         { text: 'إلغاء', style: 'cancel' },
-        { text: 'حذف', style: 'destructive', onPress: async () => {
+        { text: 'أرشفة (تعطيل)', onPress: async () => {
+          try {
+            await saveSchoolItem(schoolId, activeTab, item.id, { ...item, status: 'archived' });
+            Alert.alert('تم', 'تم نقل العنصر للأرشيف');
+          } catch (e) { Alert.alert('خطأ', 'فشلت الأرشفة'); }
+        }},
+        { text: 'حذف نهائي', style: 'destructive', onPress: async () => {
           try {
             await deleteSchoolItem(schoolId, activeTab, item.id);
-          } catch (e) {
-            Alert.alert('خطأ', 'فشل الحذف');
-          }
+          } catch (e) { Alert.alert('خطأ', 'فشل الحذف'); }
         }},
       ]);
     } else if (action === 'save') {
       if (!formData.username || !formData.name) {
         Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية (الاسم واسم المستخدم)');
+        return;
+      }
+
+      // التحقق من صحة اسم المستخدم (لا يحتوي على رموز خاصة تكسر Firebase)
+      const usernameRegex = /^[a-zA-Z0-9_@,]+$/;
+      if (!usernameRegex.test(formData.username)) {
+        Alert.alert('خطأ', 'اسم المستخدم يجب أن يحتوي على أحرف وأرقام فقط');
+        return;
+      }
+
+      // التحقق من رقم الجوال إذا كان موجوداً
+      if (formData.phone && !/^\d+$/.test(formData.phone)) {
+        Alert.alert('خطأ', 'رقم الجوال يجب أن يتكون من أرقام فقط');
         return;
       }
 
@@ -368,30 +385,17 @@ export default function SchoolScreen({ route, navigation }) {
         keyExtractor={item => item.id}
         contentContainerStyle={{ padding: 15, paddingBottom: 100 }}
         renderItem={({ item }) => (
-          <View style={[styles.card, activeTab === 'emergencies' && !item.resolved && { borderColor: '#EF4444', borderWidth: 1 }]}>
-            <View style={styles.cardActions}>
-              {(isMainAdmin || (isSubManager && userPermissions.edit_items)) && (
-              <TouchableOpacity style={styles.editBtn} onPress={() => { setFormData(item); setEditingId(item.id); setShowForm(true); }}>
-                <Text style={styles.editBtnText}>تعديل</Text>
-              </TouchableOpacity>
-            )}
-            {(isMainAdmin || (isSubManager && userPermissions.delete_items)) && (
-              <TouchableOpacity style={styles.deleteBtn} onPress={() => handleAction('delete', item)}>
-                <Text style={styles.deleteBtnText}>حذف</Text>
-              </TouchableOpacity>
-            )}
-            </View>
-            <View style={{ alignItems: 'flex-end', flex: 1 }}>
-              <Text style={styles.cardTitle}>{item.displayName || item.name || 'بدون اسم'}</Text>
-              <Text style={styles.cardSub}>{item.username || item.id || '---'}</Text>
-              {activeTab === 'managers' && item.permissions && (
-                <Text style={styles.permsSummary}>
-                  الصلاحيات: {Object.keys(item.permissions).filter(k => item.permissions[k]).length}
-                </Text>
-              )}
-              {activeTab === 'emergencies' && <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: 'bold' }}>⚠️ {item.type || 'حالة طوارئ'}</Text>}
-            </View>
-          </View>
+          <SchoolDataItem 
+            item={item} 
+            tab={activeTab} 
+            permissions={isMainAdmin ? { edit_items: true, delete_items: true } : userPermissions}
+            onEdit={(item) => {
+              setFormData(item);
+              setEditingId(item.id);
+              setShowForm(true);
+            }}
+            onDelete={(item) => handleAction('delete', item)}
+          />
         )}
         ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#64748B' }}>لا توجد بيانات</Text>}
       />

@@ -42,10 +42,24 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
       role: roleMap[tab] || tab,
       originalRole: tab === 'managers' ? 'subManager' : null // تمييزه كمدير فرعي
     });
+
+    // إضافة بيانات المستخدم في جدول users العام مع ربطه بالمدرسة لضمان الخصوصية
+    await set(ref(db, `users/${safeUsername}`), {
+      ...formData,
+      schoolId,
+      role: roleMap[tab] || tab,
+      id: safeUsername
+    });
   }
 };
 
 export const deleteSchoolItem = async (schoolId, tab, itemId) => {
+  // حذف من مسار المدرسة
   const path = `schools/${schoolId}/${tab}/${itemId}`;
   await remove(ref(db, path));
+
+  // حذف من الفهارس العامة لضمان عدم بقاء بيانات معلقة
+  const safeUsername = itemId; // itemId هو الـ username المعدل
+  await remove(ref(db, `userIndex/${safeUsername}`));
+  await remove(ref(db, `users/${safeUsername}`));
 };
