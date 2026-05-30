@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  ScrollView,
   StatusBar,
   Modal,
   Image
@@ -26,8 +25,6 @@ import {
 } from 'firebase/database';
 import { ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-import DateTimePicker from '@react-native-community/datetimepicker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function SuperAdminScreen({ navigation }) {
@@ -49,11 +46,10 @@ export default function SuperAdminScreen({ navigation }) {
     new Date(new Date().setFullYear(new Date().getFullYear() + 1))
   );
 
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingSchoolId, setEditingSchoolId] = useState(null);
 
+  // ميزة تغيير كلمة سر السوبر أدمن
   const [showPassModal, setShowPassModal] = useState(false);
   const [newAdminPass, setNewAdminPass] = useState('');
 
@@ -209,6 +205,21 @@ export default function SuperAdminScreen({ navigation }) {
     }
   };
 
+  const handleUpdateAdminPassword = async () => {
+    if (!newAdminPass.trim()) return;
+    setLoading(true);
+    try {
+      await set(ref(db, 'admin_settings/super_admin/password'), newAdminPass);
+      Alert.alert('نجاح', 'تم تغيير كلمة السر بنجاح');
+      setShowPassModal(false);
+      setNewAdminPass('');
+    } catch (e) {
+      Alert.alert('خطأ', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!msgContent.trim()) return;
     setLoading(true);
@@ -222,10 +233,8 @@ export default function SuperAdminScreen({ navigation }) {
       };
 
       if (msgTarget) {
-        // رسالة لمدرسة محددة
         await set(ref(db, `schools/${msgTarget.id}/messages/${msgData.id}`), msgData);
       } else {
-        // رسالة لجميع المدارس
         for (const school of schools) {
           await set(ref(db, `schools/${school.id}/messages/${msgData.id}`), msgData);
         }
@@ -247,7 +256,7 @@ export default function SuperAdminScreen({ navigation }) {
     setEditingSchoolId(null);
   };
 
-  const handleEditPress = (school) => {
+  const handleEditPress = useCallback((school) => {
     setEditingSchoolId(school.id);
     setSchoolName(school.name);
     setDisplayName(school.displayName || school.name);
@@ -258,7 +267,27 @@ export default function SuperAdminScreen({ navigation }) {
     setAdminPassword(school.password);
     if (school.startDate) setStartDate(new Date(school.startDate));
     if (school.endDate) setEndDate(new Date(school.endDate));
-  };
+  }, []);
+
+  const handleDeleteSchool = useCallback((id) => {
+    Alert.alert('تأكيد الحذف', 'حذف هذه المدرسة نهائياً؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حذف', style: 'destructive', onPress: async () => {
+        setLoading(true);
+        try {
+          const schoolToDelete = schools.find(s => s.id === id);
+          await remove(ref(db, `schools/${id}`));
+          if (schoolToDelete?.email) {
+            const safeKey = schoolToDelete.email.replace(/\./g, ',');
+            await remove(ref(db, `users/${safeKey}`));
+            await remove(ref(db, `userIndex/${safeKey}`));
+          }
+          Alert.alert('نجاح', 'تم الحذف');
+        } catch (e) { Alert.alert('خطأ', e.message); }
+        finally { setLoading(false); }
+      }}
+    ]);
+  }, [schools]);
 
   const renderSchoolItem = ({ item }) => {
     const status = checkSubscriptionStatus(item.endDate);
@@ -298,102 +327,119 @@ export default function SuperAdminScreen({ navigation }) {
     );
   };
 
-  const handleDeleteSchool = (id) => {
-    Alert.alert('تأكيد الحذف', 'حذف هذه المدرسة نهائياً؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      { text: 'حذف', style: 'destructive', onPress: async () => {
-        setLoading(true);
-        try {
-          const schoolToDelete = schools.find(s => s.id === id);
-          await remove(ref(db, `schools/${id}`));
-          if (schoolToDelete?.email) {
-            const safeKey = schoolToDelete.email.replace(/\./g, ',');
-            await remove(ref(db, `users/${safeKey}`));
-            await remove(ref(db, `userIndex/${safeKey}`));
-          }
-          Alert.alert('نجاح', 'تم الحذف');
-        } catch (e) { Alert.alert('خطأ', e.message); }
-        finally { setLoading(false); }
-      }}
-    ]);
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
+  const renderHeader = () => (
+    <View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>لوحة المدير العام 👑</Text>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: '#F1F5F9', marginRight: 10 }]} onPress={() => setShowPassModal(true)}>
+            <Text style={[styles.logoutText, { color: '#64748B' }]}>كلمة السر 🔐</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
             <Text style={styles.logoutText}>خروج</Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
-          
-          <View style={styles.logoSection}>
-            <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
-              {logoUrl ? (
-                <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
-              ) : (
-                <View style={styles.uploadPlaceholder}>
-                  <Text style={{ fontSize: 30 }}>📸</Text>
-                  <Text style={styles.uploadText}>رفع الشعار</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
-          <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
-          <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
-          <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
-          <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
-
-          <Text style={styles.label}>اختر باقة الاشتراك:</Text>
-          <View style={styles.planContainer}>
-            {[
-              { id: '1', name: 'صغيرة (3)' },
-              { id: '2', name: 'متوسطة (7)' },
-              { id: '3', name: 'مفتوحة' }
-            ].map(plan => (
-              <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
-                <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
+      <View style={styles.formCard}>
+        <Text style={styles.formTitle}>{editingSchoolId ? 'تعديل مدرسة' : 'إضافة مدرسة جديدة'}</Text>
+        
+        <View style={styles.logoSection}>
+          <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} />
+            ) : (
+              <View style={styles.uploadPlaceholder}>
+                <Text style={{ fontSize: 30 }}>📸</Text>
+                <Text style={styles.uploadText}>رفع الشعار</Text>
+              </View>
+            )}
           </TouchableOpacity>
-          {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
         </View>
 
-        <View style={styles.listSection}>
-          <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>المدارس المسجلة ({filteredSchools.length})</Text>
-            <TouchableOpacity style={styles.broadcastBtn} onPress={() => { setMsgTarget(null); setShowMsgModal(true); }}>
-              <Text style={styles.broadcastText}>رسالة للجميع 📢</Text>
+        <TextInput style={styles.input} placeholder="اسم المدرسة في النظام (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
+        <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
+        <TextInput style={styles.input} placeholder="رابط تقييم جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
+        <TextInput style={styles.input} placeholder="البريد الإلكتروني للمدير" value={adminEmail} onChangeText={setAdminEmail} keyboardType="email-address" />
+        <TextInput style={styles.input} placeholder="كلمة المرور" value={adminPassword} onChangeText={setAdminPassword} secureTextEntry />
+
+        <Text style={styles.label}>اختر باقة الاشتراك:</Text>
+        <View style={styles.planContainer}>
+          {[
+            { id: '1', name: 'صغيرة (3)' },
+            { id: '2', name: 'متوسطة (7)' },
+            { id: '3', name: 'مفتوحة' }
+          ].map(plan => (
+            <TouchableOpacity key={plan.id} style={[styles.planOption, planType === plan.id && styles.planActive]} onPress={() => setPlanType(plan.id)}>
+              <Text style={[styles.planText, planType === plan.id && styles.planTextActive]}>{plan.name}</Text>
             </TouchableOpacity>
-          </View>
-          
-          <TextInput 
-            style={styles.searchInput} 
-            placeholder="بحث ذكي (اسم، بريد، عرض)..." 
-            value={searchQuery} 
-            onChangeText={setSearchQuery} 
-          />
-
-          <FlatList
-            data={filteredSchools}
-            keyExtractor={item => item.id}
-            renderItem={renderSchoolItem}
-            scrollEnabled={false}
-            ListEmptyComponent={<Text style={styles.emptyText}>لا توجد مدارس مطابقة للبحث</Text>}
-          />
+          ))}
         </View>
-      </ScrollView>
+
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchool} disabled={loading}>
+          {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{editingSchoolId ? 'تحديث البيانات' : 'إنشاء المدرسة'}</Text>}
+        </TouchableOpacity>
+        {editingSchoolId && <TouchableOpacity onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity>}
+      </View>
+
+      <View style={styles.listSection}>
+        <View style={styles.listHeader}>
+          <Text style={styles.listTitle}>المدارس المسجلة ({filteredSchools.length})</Text>
+          <TouchableOpacity style={styles.broadcastBtn} onPress={() => { setMsgTarget(null); setShowMsgModal(true); }}>
+            <Text style={styles.broadcastText}>رسالة للجميع 📢</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <TextInput 
+          style={styles.searchInput} 
+          placeholder="بحث ذكي (اسم، بريد، عرض)..." 
+          value={searchQuery} 
+          onChangeText={setSearchQuery} 
+        />
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      
+      <FlatList
+        data={filteredSchools}
+        keyExtractor={item => item.id}
+        renderItem={renderSchoolItem}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        initialNumToRender={5}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
+        ListEmptyComponent={<Text style={styles.emptyText}>لا توجد مدارس مطابقة للبحث</Text>}
+      />
+
+      {/* مودال تغيير كلمة السر */}
+      <Modal visible={showPassModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>تغيير كلمة سر السوبر أدمن 🔐</Text>
+            <TextInput 
+              style={styles.input} 
+              placeholder="كلمة السر الجديدة" 
+              value={newAdminPass} 
+              onChangeText={setNewAdminPass} 
+              secureTextEntry
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.modalBtn, styles.sendBtn]} onPress={handleUpdateAdminPassword}>
+                <Text style={styles.modalBtnText}>تحديث الآن</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.closeBtn]} onPress={() => setShowPassModal(false)}>
+                <Text style={styles.modalBtnText}>إلغاء</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* مودال الرسائل */}
       <Modal visible={showMsgModal} transparent animationType="slide">
@@ -428,7 +474,7 @@ const styles = StyleSheet.create({
   header: { padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1E293B' },
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
-  logoutText: { color: '#EF4444', fontWeight: 'bold' },
+  logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
   formCard: { margin: 20, padding: 20, backgroundColor: '#FFF', borderRadius: 20, elevation: 4 },
   formTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
   logoSection: { alignItems: 'center', marginBottom: 20 },
@@ -452,7 +498,7 @@ const styles = StyleSheet.create({
   broadcastBtn: { backgroundColor: '#0EA5E9', padding: 8, borderRadius: 8 },
   broadcastText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   searchInput: { backgroundColor: '#FFF', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'right' },
-  schoolCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 15, elevation: 2 },
+  schoolCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginHorizontal: 20, marginBottom: 15, elevation: 2 },
   cardHeader: { flexDirection: 'row-reverse', alignItems: 'center' },
   cardLogo: { width: 40, height: 40, borderRadius: 20 },
   logoPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
