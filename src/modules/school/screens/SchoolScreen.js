@@ -462,6 +462,14 @@ export default function SchoolScreen({ route, navigation }) {
             <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
           </TouchableOpacity>
         )}
+        {isMainAdmin && (
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#8B5CF6' }]} 
+            onPress={() => navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: schoolLogo ? { latitude: 0, longitude: 0 } : null } })}
+          >
+            <Text style={styles.actionButtonText}>📍 موقع المدرسة</Text>
+          </TouchableOpacity>
+        )}
         {(isMainAdmin || (isSubManager && userPermissions.view_admin_messages)) && adminMessages.length > 0 && (
           <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#3B82F6' }]} onPress={() => setShowMsgModal(true)}>
             <Text style={styles.actionButtonText}>رسائل الإدارة ({adminMessages.length}) ✉️</Text>

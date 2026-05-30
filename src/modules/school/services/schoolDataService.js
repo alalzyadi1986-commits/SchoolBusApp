@@ -22,6 +22,19 @@ export const subscribeToSchoolInfo = (schoolId, callback) => {
   });
 };
 
+export const updateSchoolLocation = async (schoolId, locationData) => {
+  try {
+    const schoolRef = ref(db, `schools/${schoolId}`);
+    await update(schoolRef, {
+      location: locationData,
+      locationUpdatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Update School Location Error:", error);
+    throw error;
+  }
+};
+
 export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
   try {
     const path = `schools/${schoolId}/${tab}`;
