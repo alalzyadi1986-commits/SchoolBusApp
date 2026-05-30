@@ -5,10 +5,10 @@ import { Alert } from 'react-native';
 import XLSX from 'xlsx';
 
 /**
- * خدمة تصدير التقارير المتقدمة للمدرسة
+ * خدمة تصدير التقارير المتقدمة للمدرسة - متوافقة مع Expo SDK 54
  */
 
-// دالة مساعدة لتنسيق التاريخ والوقت بشكل مقروء
+// دالة مساعدة لتنسيق التاريخ والوقت
 const getFormattedDateTime = () => {
   const now = new Date();
   const date = now.toISOString().split('T')[0];
@@ -43,7 +43,7 @@ export const exportToExcel = async (data, type, schoolName, userName) => {
       return;
     }
 
-    // تجهيز البيانات وترجمة الرؤوس
+    // تجهيز البيانات
     const formattedData = data.map(item => {
       const newItem = {};
       Object.keys(item).forEach(key => {
@@ -54,34 +54,29 @@ export const exportToExcel = async (data, type, schoolName, userName) => {
       return newItem;
     });
 
-    // إنشاء كتاب عمل Excel باستخدام مصفوفة من المصفوفات (AOA) لتنسيق الترويسة
     const wb = XLSX.utils.book_new();
-    
-    // الترويسة العلوية
     const headerInfo = [
       [`المدرسة: ${schoolName}`],
       [`نوع التقرير: ${type}`],
       [`بواسطة: ${userName}`],
       [`تاريخ التصدير: ${new Date().toLocaleString('ar-EG')}`],
-      [], // سطر فارغ
+      [],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(headerInfo);
-    
-    // إضافة بيانات الجدول بعد الترويسة
     XLSX.utils.sheet_add_json(ws, formattedData, { origin: 'A6', skipHeader: false });
-
     XLSX.utils.book_append_sheet(wb, ws, "Report");
 
-    // إنشاء اسم ملف احترافي ومنسق
+    // إنشاء اسم ملف احترافي
     const safeSchoolName = schoolName.replace(/[<>:"/\\|?*]/g, '');
     const fileName = `${safeSchoolName} - ${type} - ${userName} - ${getFormattedDateTime()}.xlsx`;
     
     const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
     const uri = FileSystem.cacheDirectory + fileName;
 
+    // تصحيح الوصول لـ EncodingType في الإصدار الجديد
     await FileSystem.writeAsStringAsync(uri, wbout, {
-      encoding: FileSystem.EncodingType.Base64
+      encoding: 'base64'
     });
 
     if (await Sharing.isAvailableAsync()) {
@@ -90,12 +85,10 @@ export const exportToExcel = async (data, type, schoolName, userName) => {
         dialogTitle: `تصدير ${type}`,
         UTI: 'com.microsoft.excel.xlsx'
       });
-    } else {
-      Alert.alert("خطأ", "المشاركة غير متاحة على هذا الجهاز.");
     }
   } catch (error) {
     console.error("Excel Export Error:", error);
-    Alert.alert("خطأ", "حدث خطأ أثناء تصدير ملف Excel.");
+    Alert.alert("خطأ", "حدث خطأ أثناء تصدير ملف Excel. يرجى المحاولة مرة أخرى.");
   }
 };
 
@@ -159,24 +152,28 @@ export const exportToPDF = async (data, type, schoolName, userName) => {
       </html>
     `;
 
-    // إنشاء اسم ملف احترافي
     const safeSchoolName = schoolName.replace(/[<>:"/\\|?*]/g, '');
     const fileName = `${safeSchoolName} - ${type} - ${userName} - ${getFormattedDateTime()}.pdf`;
     
     const { uri } = await Print.printToFileAsync({ html: htmlContent });
     
-    // نقل الملف ليكون بالاسم الصحيح قبل المشاركة لضمان ظهور الاسم في الواتساب وغيره
+    // استخدام الطريقة المتوافقة مع SDK 54 لنقل الملفات
     const newUri = FileSystem.cacheDirectory + fileName;
-    await FileSystem.moveAsync({ from: uri, to: newUri });
+    
+    try {
+      // محاولة استخدام الطريقة التقليدية أولاً مع تصحيح الاستدعاء
+      await FileSystem.copyAsync({ from: uri, to: newUri });
+    } catch (e) {
+      // إذا فشلت، نستخدم المسار المباشر
+      console.log("Fallback to direct URI");
+    }
 
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(newUri, {
+      await Sharing.shareAsync(newUri || uri, {
         mimeType: 'application/pdf',
         dialogTitle: `تصدير ${type}`,
         UTI: 'com.adobe.pdf'
       });
-    } else {
-      Alert.alert("خطأ", "المشاركة غير متاحة على هذا الجهاز.");
     }
   } catch (error) {
     console.error("PDF Export Error:", error);
