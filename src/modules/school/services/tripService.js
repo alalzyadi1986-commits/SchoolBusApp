@@ -1,5 +1,5 @@
 import { ref, onValue, off, query, orderByChild, equalTo } from 'firebase/database';
-import { db } from '../../../config/firebase';
+import { db } from '../../../firebaseConfig';
 
 /**
  * خدمة مراقبة الرحلات النشطة
