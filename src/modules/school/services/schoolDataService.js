@@ -40,8 +40,9 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
     };
     await set(ref(db, `userIndex/${safeUsername}`), { 
       schoolId, 
-      role: roleMap[tab] || tab,
-      originalRole: tab === 'managers' ? 'subManager' : null // تمييزه كمدير فرعي
+      // للمدراء الفرعيين، نستخدم الدور 'school' في الفهرس ليتوافق مع authService.js
+      role: tab === 'managers' ? 'school' : (roleMap[tab] || tab),
+      originalRole: tab === 'managers' ? 'subManager' : null
     });
 
     // إضافة بيانات المستخدم في جدول users العام مع ربطه بالمدرسة لضمان الخصوصية
