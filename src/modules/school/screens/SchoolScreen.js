@@ -26,6 +26,11 @@ import {
 
 export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
+  
+  // تحديد هل المستخدم هو المدير الرئيسي أم مدير فرعي
+  const isMainAdmin = user?.role === 'school';
+  const userPermissions = user?.permissions || {};
+
   const [activeTab, setActiveTab] = useState('drivers');
   const [loading, setLoading] = useState(true);
   const [expiryDate, setExpiryDate] = useState('');
@@ -55,6 +60,16 @@ export default function SchoolScreen({ route, navigation }) {
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastTarget, setBroadcastTarget] = useState('all'); // 'all', 'parents', 'drivers'
   const [broadcastContent, setBroadcastContent] = useState('');
+
+  // تعريف الصلاحيات المتاحة
+  const AVAILABLE_PERMISSIONS = [
+    { id: 'manage_staff', label: 'إدارة الموظفين والمرافقات' },
+    { id: 'manage_students', label: 'إدارة الطلاب وأولياء الأمور' },
+    { id: 'send_broadcasts', label: 'إرسال رسائل جماعية' },
+    { id: 'view_reports', label: 'مشاهدة التقارير' },
+    { id: 'handle_emergencies', label: 'استقبال حالات الطوارئ' },
+    { id: 'view_complaints', label: 'استقبال الشكاوي' }
+  ];
 
   useEffect(() => {
     if (!schoolId) {
@@ -96,6 +111,17 @@ export default function SchoolScreen({ route, navigation }) {
     };
   }, [schoolId]);
 
+  // فحص الصلاحيات للتبويبات
+  const canViewTab = (tabId) => {
+    if (isMainAdmin) return true;
+    if (tabId === 'drivers' || tabId === 'managers') return false; // السائقين والمدراء للمدير الرئيسي فقط
+    if (tabId === 'staff') return userPermissions.manage_staff;
+    if (tabId === 'parents' || tabId === 'students') return userPermissions.manage_students;
+    if (tabId === 'reports') return userPermissions.view_reports;
+    if (tabId === 'emergencies') return userPermissions.handle_emergencies;
+    return false;
+  };
+
   const handleAction = async (action, item = null) => {
     if (isExpired && action !== 'delete') {
       Alert.alert('تنبيه', 'يرجى تجديد الاشتراك للمتابعة');
@@ -131,7 +157,13 @@ export default function SchoolScreen({ route, navigation }) {
       }
 
       try {
-        await saveSchoolItem(schoolId, activeTab, editingId, formData);
+        // إذا كان التبويب هو المدراء، نحفظ الصلاحيات أيضاً
+        const dataToSave = { ...formData };
+        if (activeTab === 'managers') {
+          dataToSave.role = 'school_manager'; // دور المدير الفرعي
+        }
+
+        await saveSchoolItem(schoolId, activeTab, editingId, dataToSave);
         setFormData({});
         setEditingId(null);
         setShowForm(false);
@@ -142,20 +174,30 @@ export default function SchoolScreen({ route, navigation }) {
     }
   };
 
+  const togglePermission = (permId) => {
+    const currentPerms = formData.permissions || {};
+    setFormData({
+      ...formData,
+      permissions: {
+        ...currentPerms,
+        [permId]: !currentPerms[permId]
+      }
+    });
+  };
+
   const handleSendBroadcast = async () => {
     if (!broadcastContent.trim()) return;
     setLoading(true);
     try {
       const broadcastData = {
         id: Date.now(),
-        sender: 'مدير المدرسة',
+        sender: isMainAdmin ? 'مدير المدرسة الرئيسي' : `المدير: ${user.name}`,
         content: broadcastContent,
         timestamp: new Date().toISOString(),
         type: 'school_broadcast',
         target: broadcastTarget
       };
       
-      // حفظ الإعلان في قاعدة بيانات المدرسة ليراه الجميع
       await saveSchoolItem(schoolId, 'school_announcements', null, broadcastData);
       
       Alert.alert('نجاح', 'تم إرسال الإعلان لجميع المعنيين');
@@ -217,6 +259,7 @@ export default function SchoolScreen({ route, navigation }) {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
             <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
+            {!isMainAdmin && <Text style={styles.subTitle}>مرحباً: {user.name}</Text>}
             <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
           </View>
           {schoolLogo ? (
@@ -227,34 +270,44 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* لوحة الإحصائيات الذكية */}
+      {/* لوحة الإحصائيات الذكية - تظهر للجميع ولكن ببيانات حسب الصلاحية */}
       <View style={styles.statsContainer}>
-        <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
-          <Text style={styles.statValue}>{stats.buses}</Text>
-          <Text style={styles.statLabel}>باصات</Text>
-        </View>
-        <View style={[styles.statCard, { borderRightColor: '#10B981' }]}>
-          <Text style={styles.statValue}>{stats.students}</Text>
-          <Text style={styles.statLabel}>طلاب</Text>
-        </View>
-        <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
-          <Text style={styles.statValue}>{stats.activeTrips}</Text>
-          <Text style={styles.statLabel}>رحلات نشطة</Text>
-        </View>
-        <TouchableOpacity 
-          style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
-          onPress={() => setActiveTab('emergencies')}
-        >
-          <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
-          <Text style={styles.statLabel}>طوارئ</Text>
-        </TouchableOpacity>
+        {isMainAdmin && (
+          <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
+            <Text style={styles.statValue}>{stats.buses}</Text>
+            <Text style={styles.statLabel}>باصات</Text>
+          </View>
+        )}
+        {(isMainAdmin || userPermissions.manage_students) && (
+          <View style={[styles.statCard, { borderRightColor: '#10B981' }]}>
+            <Text style={styles.statValue}>{stats.students}</Text>
+            <Text style={styles.statLabel}>طلاب</Text>
+          </View>
+        )}
+        {isMainAdmin && (
+          <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
+            <Text style={styles.statValue}>{stats.activeTrips}</Text>
+            <Text style={styles.statLabel}>رحلات نشطة</Text>
+          </View>
+        )}
+        {(isMainAdmin || userPermissions.handle_emergencies) && (
+          <TouchableOpacity 
+            style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
+            onPress={() => setActiveTab('emergencies')}
+          >
+            <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
+            <Text style={styles.statLabel}>طوارئ</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => setShowBroadcastModal(true)}>
-          <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
-        </TouchableOpacity>
-        {adminMessages.length > 0 && (
+        {(isMainAdmin || userPermissions.send_broadcasts) && (
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowBroadcastModal(true)}>
+            <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
+          </TouchableOpacity>
+        )}
+        {isMainAdmin && adminMessages.length > 0 && (
           <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#3B82F6' }]} onPress={() => setShowMsgModal(true)}>
             <Text style={styles.actionButtonText}>رسائل الإدارة ({adminMessages.length}) ✉️</Text>
           </TouchableOpacity>
@@ -266,7 +319,7 @@ export default function SchoolScreen({ route, navigation }) {
           {[
             { id: 'drivers', label: 'السائقين' }, { id: 'staff', label: 'المرافقات' }, { id: 'parents', label: 'أولياء الأمور' },
             { id: 'students', label: 'الطلاب' }, { id: 'managers', label: 'المدراء' }, { id: 'reports', label: 'التقارير' }, { id: 'emergencies', label: 'الطوارئ' },
-          ].map(tab => (
+          ].filter(tab => canViewTab(tab.id)).map(tab => (
             <TouchableOpacity key={tab.id} style={[styles.tab, activeTab === tab.id && styles.tabActive]} onPress={() => { setActiveTab(tab.id); setShowForm(false); }}>
               <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
             </TouchableOpacity>
@@ -295,6 +348,11 @@ export default function SchoolScreen({ route, navigation }) {
             <View style={{ alignItems: 'flex-end', flex: 1 }}>
               <Text style={styles.cardTitle}>{item.name}</Text>
               <Text style={styles.cardSub}>{item.username || item.id}</Text>
+              {activeTab === 'managers' && item.permissions && (
+                <Text style={styles.permsSummary}>
+                  الصلاحيات: {Object.keys(item.permissions).filter(k => item.permissions[k]).length}
+                </Text>
+              )}
               {activeTab === 'emergencies' && <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: 'bold' }}>⚠️ {item.type || 'حالة طوارئ'}</Text>}
             </View>
           </View>
@@ -370,23 +428,45 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </Modal>
 
+      {/* مودال الإضافة والتعديل المطور مع الصلاحيات */}
       <Modal visible={showForm} animationType="slide">
         <SafeAreaView style={{ flex: 1, padding: 20 }}>
           <Text style={[styles.title, { textAlign: 'center', marginBottom: 20 }]}>{editingId ? 'تعديل بيانات' : 'إضافة جديد'}</Text>
-          <ScrollView>
+          <ScrollView showsVerticalScrollIndicator={false}>
             {renderInput('الاسم الكامل', 'name')}
             {renderInput('اسم المستخدم', 'username')}
+            {renderInput('كلمة السر', 'password')}
+            
             {activeTab === 'drivers' && renderInput('رقم الجوال', 'phone', true)}
             {activeTab === 'drivers' && renderInput('رقم اللوحة', 'busPlate')}
             {activeTab === 'students' && renderInput('الصف', 'class')}
             {activeTab === 'students' && renderInput('اسم ولي الأمر', 'parentUsername')}
             {activeTab === 'students' && renderInput('اسم السائق', 'driverUsername')}
+
+            {/* قسم الصلاحيات عند إضافة مدير فرعي */}
+            {activeTab === 'managers' && (
+              <View style={styles.permsSection}>
+                <Text style={styles.permsTitle}>تحديد الصلاحيات للمدير الفرعي:</Text>
+                {AVAILABLE_PERMISSIONS.map(perm => (
+                  <TouchableOpacity 
+                    key={perm.id} 
+                    style={styles.permRow}
+                    onPress={() => togglePermission(perm.id)}
+                  >
+                    <Text style={styles.permLabel}>{perm.label}</Text>
+                    <View style={[styles.checkbox, formData.permissions?.[perm.id] && styles.checkboxChecked]}>
+                      {formData.permissions?.[perm.id] && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </ScrollView>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
-            <TouchableOpacity style={[styles.addBtn, { flex: 0.45, backgroundColor: '#64748B' }]} onPress={() => setShowForm(false)}>
+            <TouchableOpacity style={[styles.addBtn, { flex: 0.45, backgroundColor: '#64748B', position: 'relative', bottom: 0, left: 0, right: 0 }]} onPress={() => setShowForm(false)}>
               <Text style={styles.addBtnText}>إلغاء</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.addBtn, { flex: 0.45 }]} onPress={() => handleAction('save')}>
+            <TouchableOpacity style={[styles.addBtn, { flex: 0.45, position: 'relative', bottom: 0, left: 0, right: 0 }]} onPress={() => handleAction('save')}>
               <Text style={styles.addBtnText}>حفظ</Text>
             </TouchableOpacity>
           </View>
@@ -401,6 +481,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  subTitle: { fontSize: 12, color: '#3B82F6', fontWeight: 'bold' },
   expiryText: { fontSize: 11, color: '#EF4444', marginTop: 2 },
   logo: { width: 50, height: 50, borderRadius: 25, resizeMode: 'contain', backgroundColor: '#F1F5F9' },
   logoPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
@@ -424,6 +505,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', alignItems: 'center', elevation: 2 },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
   cardSub: { fontSize: 13, color: '#64748B' },
+  permsSummary: { fontSize: 11, color: '#3B82F6', marginTop: 2, fontWeight: 'bold' },
   cardActions: { flexDirection: 'row' },
   editBtn: { padding: 8, backgroundColor: '#EFF6FF', borderRadius: 8, marginRight: 8 },
   editBtnText: { color: '#3B82F6', fontSize: 12, fontWeight: 'bold' },
@@ -452,4 +534,11 @@ const styles = StyleSheet.create({
   inputWrapper: { marginBottom: 15 },
   inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginBottom: 5, textAlign: 'right' },
   input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' },
+  permsSection: { marginTop: 20, padding: 15, backgroundColor: '#F8FAFC', borderRadius: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
+  permsTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 15, textAlign: 'right' },
+  permRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  permLabel: { fontSize: 14, color: '#475569' },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  checkMark: { color: '#FFF', fontWeight: 'bold', fontSize: 14 }
 });
