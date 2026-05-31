@@ -210,28 +210,7 @@ export default function DriverScreen() {
   );
 }
 
-// تعريف المهمة في الخلفية (نفس الكود الأصلي)
-TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-  if (error) return;
-  if (data) {
-    const { locations } = data;
-    const location = locations[0];
-    try {
-      const session = await AsyncStorage.getItem('background_session');
-      if (session) {
-        const { schoolId, user } = JSON.parse(session);
-        await updateBusLocation(schoolId, user.username, {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          speed: Math.round(location.coords.speed * 3.6) || 0,
-          timestamp: new Date().toISOString()
-        });
-      }
-    } catch (e) {
-      console.log("Background location error", e);
-    }
-  }
-});
+// ملاحظة: تم نقل تعريف المهمة LOCATION_TASK_NAME إلى driverBackgroundService.js لتوحيد منطق التتبع ومنع التكرار.
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },

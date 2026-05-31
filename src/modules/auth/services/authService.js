@@ -40,8 +40,15 @@ export const loginUser = async (username, password) => {
         actualRole = 'schoolAdmin'; // تحديد الدور كمدير مدرسة رئيسي
       }
     } else {
-      // للمستخدمين الآخرين (سائق، ولي أمر، إلخ)
-      userPath = `schools/${schoolId}/${role}s/${safeKey}`;
+      // للمستخدمين الآخرين (سائق، ولي أمر، إلخ) باستخدام خريطة مسارات دقيقة
+      const rolePaths = {
+        driver: 'drivers',
+        parent: 'parents',
+        staff: 'staff',
+        student: 'students'
+      };
+      const roleFolder = rolePaths[role] || `${role}s`;
+      userPath = `schools/${schoolId}/${roleFolder}/${safeKey}`;
     }
 
     const userSnap = await get(ref(db, userPath));

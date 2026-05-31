@@ -27,6 +27,9 @@ export const updateSchoolLocation = async (schoolId, locationData) => {
     const schoolRef = ref(db, `schools/${schoolId}`);
     await update(schoolRef, {
       location: locationData,
+      // توحيد: كتابة الإحداثيات في الجذر أيضاً لضمان توافق القراءة في شاشات ولي الأمر والخدمات الأخرى
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
       locationUpdatedAt: new Date().toISOString()
     });
   } catch (error) {

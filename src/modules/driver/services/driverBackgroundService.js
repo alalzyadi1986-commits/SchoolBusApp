@@ -19,8 +19,14 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       if (session) {
         const { schoolId, user } = JSON.parse(session);
         const speed = Math.round(location.coords.speed * 3.6) || 0;
-        // تمرير latitude, longitude, speed كمعاملات منفصلة
-        await updateBusLocation(schoolId, user.username, location.coords.latitude, location.coords.longitude, speed);
+        // تمرير latitude, longitude, speed كمعاملات منفصلة مع ضمان تحديث الوقت والحالة
+        await updateBusLocation(
+          schoolId, 
+          user.username, 
+          location.coords.latitude, 
+          location.coords.longitude, 
+          speed
+        );
       }
     } catch (e) {
       console.error('Background location update error:', e);
