@@ -19,6 +19,7 @@ import {
   updateStudentAttendance, 
   getParentPhone 
 } from '../services/staffAttendanceService';
+import { subscribeToSchoolInfo } from '../../school/services/schoolDataService';
 
 export default function StaffScreen() {
   const route = useRoute();
@@ -26,6 +27,7 @@ export default function StaffScreen() {
   const { schoolId, user } = route.params || {};
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [socialLinks, setSocialLinks] = useState(null);
 
   useEffect(() => {
     if (!schoolId) {
@@ -39,7 +41,14 @@ export default function StaffScreen() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubSchool = subscribeToSchoolInfo(schoolId, (data) => {
+      if (data) setSocialLinks(data.socialLinks || null);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubSchool();
+    };
   }, [schoolId]);
 
   const toggleStatus = async (student, currentStatus) => {
@@ -87,9 +96,25 @@ export default function StaffScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>خروج</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Text style={styles.logoutText}>خروج</Text>
+          </TouchableOpacity>
+          {socialLinks && (
+            <View style={{ flexDirection: 'row', marginLeft: 10 }}>
+              {socialLinks.facebook && (
+                <TouchableOpacity onPress={() => Linking.openURL(socialLinks.facebook)} style={{ marginRight: 10 }}>
+                  <Text style={{ fontSize: 20 }}>🔵</Text>
+                </TouchableOpacity>
+              )}
+              {socialLinks.instagram && (
+                <TouchableOpacity onPress={() => Linking.openURL(socialLinks.instagram)}>
+                  <Text style={{ fontSize: 20 }}>📸</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.title}>لوحة المرافقة 📝</Text>
           <Text style={styles.staffName}>{user?.name}</Text>

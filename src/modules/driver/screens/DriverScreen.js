@@ -42,8 +42,9 @@ export default function DriverScreen() {
   const [isTripActive, setIsTripActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useState(0);
-  const [schoolName, setSchoolName] = useState('');
   const [schoolLogo, setSchoolLogo] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  const [socialLinks, setSocialLinks] = useState(null);
   
   const mapRef = useRef(null);
   const watchSubscription = useRef(null);
@@ -60,6 +61,7 @@ export default function DriverScreen() {
       if (data) {
         setSchoolName(data.displayName || data.name || '');
         setSchoolLogo(data.logoUrl || '');
+        setSocialLinks(data.socialLinks || null);
       }
     });
 
@@ -170,7 +172,23 @@ export default function DriverScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
+          {socialLinks && (
+            <View style={{ flexDirection: 'row', marginLeft: 10 }}>
+              {socialLinks.facebook && (
+                <TouchableOpacity onPress={() => Linking.openURL(socialLinks.facebook)} style={{ marginRight: 10 }}>
+                  <Text style={{ fontSize: 20 }}>🔵</Text>
+                </TouchableOpacity>
+              )}
+              {socialLinks.instagram && (
+                <TouchableOpacity onPress={() => Linking.openURL(socialLinks.instagram)}>
+                  <Text style={{ fontSize: 20 }}>📸</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={styles.headerInfo}>
             <Text style={styles.title}>{schoolName || 'لوحة السائق'}</Text>
