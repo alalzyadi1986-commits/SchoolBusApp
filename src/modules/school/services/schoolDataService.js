@@ -40,28 +40,42 @@ export const updateSchoolLocation = async (schoolId, locationData) => {
 
 export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
   try {
+    // التعامل مع طلبات الحذف (عندما تكون formData فارغة)
+    if (formData === null && editingId) {
+      await remove(ref(db, `schools/${schoolId}/${tab}/${editingId}`));
+      return;
+    }
+
+    // التعامل مع الحالات الخاصة (روابط التواصل أو معلومات المدرسة)
+    if (tab === 'info' && editingId) {
+      await update(ref(db, `schools/${schoolId}/${editingId}`), formData);
+      return;
+    }
+
     const path = `schools/${schoolId}/${tab}`;
-    const safeUsername = formData.username?.trim().replace(/\./g, ',');
     
     if (editingId) {
+      // تصحيح: استخدام update لضمان عدم حذف الحقول غير المرسلة
       await update(ref(db, `${path}/${editingId}`), formData);
     } else {
-    await set(ref(db, `${path}/${safeUsername}`), { ...formData, id: safeUsername });
-    const roleMap = { 
-      'drivers': 'driver', 
-      'staff': 'staff', 
-      'parents': 'parent', 
-      'students': 'student', 
-      'managers': 'subManager' // تحديد الدور كمدير فرعي
-    };
-    await set(ref(db, `userIndex/${safeUsername}`), { 
-      schoolId, 
-      // للمدراء الفرعيين، نستخدم الدور 'school' في الفهرس ليتوافق مع authService.js
-      role: tab === 'managers' ? 'school' : (roleMap[tab] || tab),
-      originalRole: tab === 'managers' ? 'subManager' : null
-    });
+      const safeUsername = formData.username?.trim().replace(/\./g, ',');
+      if (!safeUsername) throw new Error("Username is required");
 
-    // إضافة بيانات المستخدم في جدول users العام مع ربطه بالمدرسة لضمان الخصوصية
+      await set(ref(db, `${path}/${safeUsername}`), { ...formData, id: safeUsername });
+      const roleMap = { 
+        'drivers': 'driver', 
+        'staff': 'staff', 
+        'parents': 'parent', 
+        'students': 'student', 
+        'managers': 'subManager' 
+      };
+      
+      await set(ref(db, `userIndex/${safeUsername}`), { 
+        schoolId, 
+        role: tab === 'managers' ? 'school' : (roleMap[tab] || tab),
+        originalRole: tab === 'managers' ? 'subManager' : null
+      });
+
       await set(ref(db, `users/${safeUsername}`), {
         ...formData,
         schoolId,
