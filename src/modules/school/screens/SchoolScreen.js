@@ -62,6 +62,8 @@ export default function SchoolScreen({ route, navigation }) {
   // ميزة عرض رسائل الإدارة
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [selectedMsgs, setSelectedMsgs] = useState([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   // ميزة الإعلانات المدرسية
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -289,6 +291,38 @@ export default function SchoolScreen({ route, navigation }) {
     } catch (e) { console.log('Error marking as read:', e); }
   };
 
+  const toggleMsgSelection = (id) => {
+    if (selectedMsgs.includes(id)) {
+      setSelectedMsgs(selectedMsgs.filter(i => i !== id));
+    } else {
+      setSelectedMsgs([...selectedMsgs, id]);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedMsgs.length === 0) return;
+    Alert.alert('حذف الرسائل', `هل أنت متأكد من حذف ${selectedMsgs.length} رسالة؟`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { 
+        text: 'حذف', 
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // ملاحظة: الحذف يتم عن طريق تعيين قيمة null في Firebase لكل معرف
+            for (const id of selectedMsgs) {
+              await saveSchoolItem(schoolId, 'messages', id, null);
+            }
+            setSelectedMsgs([]);
+            setIsSelectionMode(false);
+            Alert.alert('تم', 'تم حذف الرسائل المختارة بنجاح');
+          } catch (e) {
+            Alert.alert('خطأ', 'فشل حذف بعض الرسائل');
+          }
+        }
+      }
+    ]);
+  };
+
   const handleReplyToAdmin = async (msg) => {
     if (!replyText.trim()) return;
     try {
@@ -484,24 +518,27 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </View>
 
-      <View style={styles.quickActions}>
-        {(isMainAdmin || (isSubManager && userPermissions.view_active_trips)) && (
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#1E293B' }]} 
-            onPress={() => navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName })}
-          >
-            <Text style={styles.actionButtonText}>📡 مراقبة حية</Text>
-          </TouchableOpacity>
-        )}
-        {(isMainAdmin || (isSubManager && userPermissions.send_broadcasts)) && (
-          <TouchableOpacity style={styles.actionButton} onPress={() => setShowBroadcastModal(true)}>
-            <Text style={styles.actionButtonText}>إعلان عام 📢</Text>
-          </TouchableOpacity>
-        )}
-        {isMainAdmin && (
-          <View style={{ flex: 1, flexDirection: 'row-reverse' }}>
+      <View style={styles.quickActionsGrid}>
+        {/* الصف الأول */}
+        <View style={styles.actionRow}>
+          {(isMainAdmin || (isSubManager && userPermissions.view_active_trips)) ? (
             <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#8B5CF6', marginLeft: 5 }]} 
+              style={[styles.gridButton, { backgroundColor: '#1E293B' }]} 
+              onPress={() => navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName })}
+            >
+              <Text style={styles.gridButtonText}>📡 مراقبة حية</Text>
+            </TouchableOpacity>
+          ) : <View style={styles.gridButtonPlaceholder} />}
+
+          {(isMainAdmin || (isSubManager && userPermissions.send_broadcasts)) ? (
+            <TouchableOpacity style={[styles.gridButton, { backgroundColor: '#10B981' }]} onPress={() => setShowBroadcastModal(true)}>
+              <Text style={styles.gridButtonText}>إعلان عام 📢</Text>
+            </TouchableOpacity>
+          ) : <View style={styles.gridButtonPlaceholder} />}
+
+          {isMainAdmin ? (
+            <TouchableOpacity 
+              style={[styles.gridButton, { backgroundColor: '#8B5CF6' }]} 
               onPress={() => {
                 navigation.navigate('SetSchoolLocation', { 
                   schoolId, 
@@ -509,27 +546,36 @@ export default function SchoolScreen({ route, navigation }) {
                 });
               }}
             >
-              <Text style={styles.actionButtonText}>📍 موقع المدرسة</Text>
+              <Text style={styles.gridButtonText}>📍 موقع المدرسة</Text>
             </TouchableOpacity>
+          ) : <View style={styles.gridButtonPlaceholder} />}
+
+          {(isMainAdmin || (isSubManager && userPermissions.view_admin_messages)) ? (
             <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#4F46E5' }]} 
+              style={[styles.gridButton, { backgroundColor: '#3B82F6' }]} 
+              onPress={() => setShowMsgModal(true)}
+            >
+              <Text style={styles.gridButtonText}>رسائل الإدارة ({adminMessages.filter(m => !m.read).length}) ✉️</Text>
+              {adminMessages.some(m => !m.read) && <View style={styles.unreadBadge} />}
+            </TouchableOpacity>
+          ) : <View style={styles.gridButtonPlaceholder} />}
+        </View>
+
+        {/* الصف الثاني */}
+        <View style={styles.actionRow}>
+          {isMainAdmin ? (
+            <TouchableOpacity 
+              style={[styles.gridButton, { backgroundColor: '#4F46E5' }]} 
               onPress={() => setShowSocialModal(true)}
             >
-              <Text style={styles.actionButtonText}>🔗 روابط التواصل</Text>
+              <Text style={styles.gridButtonText}>🔗 روابط التواصل</Text>
             </TouchableOpacity>
-          </View>
-        )}
-        {(isMainAdmin || (isSubManager && userPermissions.view_admin_messages)) && adminMessages.length > 0 && (
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#3B82F6' }]} 
-            onPress={() => setShowMsgModal(true)}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.actionButtonText}>رسائل الإدارة ({adminMessages.filter(m => !m.read).length}) ✉️</Text>
-              {adminMessages.some(m => !m.read) && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginLeft: 5 }} />}
-            </View>
-          </TouchableOpacity>
-        )}
+          ) : <View style={styles.gridButtonPlaceholder} />}
+          
+          <View style={styles.gridButtonPlaceholder} />
+          <View style={styles.gridButtonPlaceholder} />
+          <View style={styles.gridButtonPlaceholder} />
+        </View>
       </View>
 
       <View style={styles.tabsWrapper}>
@@ -670,43 +716,83 @@ export default function SchoolScreen({ route, navigation }) {
       {/* مودال عرض الرسائل الإدارية (تواصل الإدارة) */}
       <Modal visible={showMsgModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>تواصل الإدارة 📩</Text>
+          <View style={[styles.modalContent, { paddingHorizontal: 10 }]}>
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingHorizontal: 10 }}>
+              <Text style={[styles.modalTitle, { marginBottom: 0 }]}>تواصل الإدارة 📩</Text>
+              <TouchableOpacity onPress={() => { setIsSelectionMode(!isSelectionMode); setSelectedMsgs([]); }}>
+                <Text style={{ color: '#3B82F6', fontWeight: 'bold' }}>{isSelectionMode ? 'إلغاء' : 'تحديد'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isSelectionMode && selectedMsgs.length > 0 && (
+              <TouchableOpacity 
+                style={{ backgroundColor: '#EF4444', padding: 8, borderRadius: 10, marginBottom: 10, alignItems: 'center' }}
+                onPress={handleDeleteSelected}
+              >
+                <Text style={{ color: '#FFF', fontWeight: 'bold' }}>حذف المختار ({selectedMsgs.length}) 🗑️</Text>
+              </TouchableOpacity>
+            )}
+
             <FlatList
               data={adminMessages}
               keyExtractor={item => item.id.toString()}
               renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={[styles.msgItem, !item.read && { backgroundColor: '#F0F9FF', borderRightWidth: 4, borderRightColor: '#3B82F6' }]}
-                  onPress={() => !item.read && handleMarkAsRead(item.id)}
-                >
-                  <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.msgDate}>
-                      {new Date(item.timestamp).toLocaleDateString('ar-EG')} - {new Date(item.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                <View style={[styles.msgItem, !item.read && { backgroundColor: '#F0F9FF', borderRightWidth: 4, borderRightColor: '#3B82F6' }]}>
+                  <TouchableOpacity 
+                    style={{ flex: 1 }} 
+                    onPress={() => {
+                      if (isSelectionMode) {
+                        toggleMsgSelection(item.id);
+                      } else if (!item.read) {
+                        handleMarkAsRead(item.id);
+                      }
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
+                        {isSelectionMode && (
+                          <View style={[styles.checkbox, { marginLeft: 10, width: 20, height: 20 }, selectedMsgs.includes(item.id) && styles.checkboxChecked]}>
+                            {selectedMsgs.includes(item.id) && <Text style={{ color: '#FFF', fontSize: 12 }}>✓</Text>}
+                          </View>
+                        )}
+                        <Text style={{ fontWeight: 'bold', color: '#1E293B', fontSize: 14 }}>الإدارة العامة 🏛️</Text>
+                      </View>
+                      <Text style={styles.msgDate}>
+                        {new Date(item.timestamp).toLocaleDateString('ar-EG')} - {new Date(item.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                    
+                    <Text style={[styles.msgText, { fontWeight: item.read ? 'normal' : 'bold', textAlign: 'right', marginTop: 8 }]}>
+                      {item.content}
                     </Text>
-                    {!item.read && <Text style={{ fontSize: 10, color: '#3B82F6', fontWeight: 'bold' }}>غير مقروءة</Text>}
-                  </View>
-                  <Text style={[styles.msgText, { fontWeight: item.read ? 'normal' : 'bold', textAlign: 'right' }]}>{item.content}</Text>
+                    {!item.read && <Text style={{ fontSize: 10, color: '#3B82F6', fontWeight: 'bold', textAlign: 'left', marginTop: 5 }}>غير مقروءة</Text>}
+                  </TouchableOpacity>
                   
                   {/* قسم الرد على الرسالة */}
-                  <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 }}>
-                    <TextInput 
-                      style={[styles.input, { height: 40, fontSize: 12 }]} 
-                      placeholder="اكتب ردك هنا..." 
-                      onChangeText={setReplyText}
-                    />
-                    <TouchableOpacity 
-                      style={[styles.editBtn, { marginTop: 5, alignSelf: 'flex-start', backgroundColor: '#3B82F6' }]}
-                      onPress={() => handleReplyToAdmin(item)}
-                    >
-                      <Text style={[styles.editBtnText, { color: '#FFF' }]}>إرسال الرد</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
+                  {!isSelectionMode && (
+                    <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 }}>
+                      <TextInput 
+                        style={[styles.input, { height: 40, fontSize: 12, backgroundColor: '#FFF' }]} 
+                        placeholder="اكتب ردك هنا..." 
+                        onChangeText={setReplyText}
+                      />
+                      <TouchableOpacity 
+                        style={[styles.editBtn, { marginTop: 8, alignSelf: 'flex-start', backgroundColor: '#3B82F6', paddingHorizontal: 15 }]}
+                        onPress={() => handleReplyToAdmin(item)}
+                      >
+                        <Text style={[styles.editBtnText, { color: '#FFF' }]}>إرسال الرد</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               )}
-              style={{ maxHeight: 400 }}
+              style={{ maxHeight: 450 }}
+              showsVerticalScrollIndicator={false}
             />
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setShowMsgModal(false)}>
+            <TouchableOpacity 
+              style={[styles.closeBtn, { backgroundColor: '#64748B' }]} 
+              onPress={() => { setShowMsgModal(false); setIsSelectionMode(false); setSelectedMsgs([]); }}
+            >
               <Text style={styles.closeBtnText}>إغلاق</Text>
             </TouchableOpacity>
           </View>
@@ -808,9 +894,12 @@ const styles = StyleSheet.create({
   statCard: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 12, marginHorizontal: 4, alignItems: 'center', elevation: 2, borderRightWidth: 4 },
   statValue: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
   statLabel: { fontSize: 10, color: '#64748B', marginTop: 2 },
-  quickActions: { flexDirection: 'row-reverse', paddingHorizontal: 15, marginBottom: 10 },
-  actionButton: { backgroundColor: '#10B981', padding: 10, borderRadius: 10, marginLeft: 10, flex: 1, alignItems: 'center' },
-  actionButtonText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  quickActionsGrid: { paddingHorizontal: 10, marginBottom: 15 },
+  actionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 10 },
+  gridButton: { flex: 1, height: 120, borderRadius: 15, padding: 10, marginHorizontal: 5, justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  gridButtonPlaceholder: { flex: 1, height: 120, marginHorizontal: 5 },
+  gridButtonText: { color: '#FFF', fontSize: 13, fontWeight: 'bold', textAlign: 'center' },
+  unreadBadge: { position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' },
   tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: '#F1F5F9' },
