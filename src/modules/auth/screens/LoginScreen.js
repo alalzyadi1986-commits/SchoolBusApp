@@ -126,7 +126,13 @@ export default function LoginScreen() {
         Alert.alert('❌', language === 'ar' ? 'بيانات غير صحيحة' : 'Invalid credentials');
       }
     } catch (e) {
-      Alert.alert('❌', 'Login Error');
+      if (e.message === 'SCHOOL_SUSPENDED') {
+        Alert.alert('🚫', language === 'ar' ? 'عذراً، هذه المدرسة موقوفة مؤقتاً. يرجى مراجعة الإدارة.' : 'Sorry, this school is temporarily suspended.');
+      } else if (e.message === 'SUBSCRIPTION_EXPIRED') {
+        Alert.alert('⏳', language === 'ar' ? 'انتهت فترة اشتراك المدرسة. يرجى التجديد للمتابعة.' : 'School subscription has expired. Please renew.');
+      } else {
+        Alert.alert('❌', language === 'ar' ? 'خطأ في تسجيل الدخول' : 'Login Error');
+      }
     } finally {
       setLoading(false);
     }

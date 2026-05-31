@@ -55,6 +55,24 @@ export const loginUser = async (username, password) => {
     const userData = userSnap.val();
 
     if (userData && userData.password === password) {
+      // 4. التحقق من حالة اشتراك المدرسة (باستثناء السوبر أدمن)
+      const schoolSnap = await get(ref(db, `schools/${schoolId}`));
+      const schoolInfo = schoolSnap.val();
+      
+      if (schoolInfo) {
+        // التحقق من الإيقاف المؤقت
+        if (schoolInfo.status === 'suspended') {
+          throw new Error('SCHOOL_SUSPENDED');
+        }
+        
+        // التحقق من تاريخ انتهاء الاشتراك
+        const today = new Date();
+        const expiryDate = new Date(schoolInfo.endDate);
+        if (expiryDate < today) {
+          throw new Error('SUBSCRIPTION_EXPIRED');
+        }
+      }
+
       return { ...userData, schoolId, role: actualRole, username: safeKey };
     }
 
