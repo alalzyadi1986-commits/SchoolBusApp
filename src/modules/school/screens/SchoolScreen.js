@@ -40,6 +40,7 @@ export default function SchoolScreen({ route, navigation }) {
   const [isExpired, setIsExpired] = useState(false);
   const [schoolLimits, setSchoolLimits] = useState({ maxBuses: 3, maxStudents: 50 });
   const [schoolLogo, setSchoolLogo] = useState('');
+  const [currentLocation, setCurrentLocation] = useState(null);
 
   const [drivers, setDrivers] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -91,6 +92,9 @@ export default function SchoolScreen({ route, navigation }) {
         setExpiryDate(data.endDate || '');
         setIsExpired(new Date(data.endDate) < new Date());
         setSchoolLogo(data.logoUrl || '');
+        if (data.location) {
+          setCurrentLocation(data.location);
+        }
         if (data.limits) {
           setSchoolLimits(data.limits);
         }
@@ -465,7 +469,12 @@ export default function SchoolScreen({ route, navigation }) {
         {isMainAdmin && (
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#8B5CF6' }]} 
-            onPress={() => navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: schoolLogo ? { latitude: 0, longitude: 0 } : null } })}
+            onPress={() => {
+              navigation.navigate('SetSchoolLocation', { 
+                schoolId, 
+                currentInfo: { location: currentLocation } 
+              });
+            }}
           >
             <Text style={styles.actionButtonText}>📍 موقع المدرسة</Text>
           </TouchableOpacity>
