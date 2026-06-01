@@ -602,7 +602,14 @@ export default function SuperAdminScreen({ navigation }) {
                     <Text style={styles.inboxTime}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
                   </View>
                   <Text style={styles.inboxSender}>من: {item.sender}</Text>
-                  <Text style={styles.inboxContent}>{item.content}</Text>
+                  <View style={styles.contentWrapper}>
+                    <Text style={styles.inboxContent}>{item.content}</Text>
+                  </View>
+                  {item.originalMsgId && (
+                    <View style={styles.referenceBox}>
+                      <Text style={styles.referenceLabel}>رداً على رسالتك السابقة</Text>
+                    </View>
+                  )}
                   <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 }}>
                     <TouchableOpacity 
                       style={styles.replyBtn} 
@@ -679,6 +686,9 @@ const styles = StyleSheet.create({
   inboxTime: { fontSize: 10, color: '#64748B' },
   inboxSender: { fontSize: 12, color: '#3B82F6', marginBottom: 5, textAlign: 'right' },
   inboxContent: { fontSize: 13, color: '#475569', textAlign: 'right', lineHeight: 20 },
+  contentWrapper: { backgroundColor: '#FFF', padding: 10, borderRadius: 10, marginTop: 5, borderWidth: 1, borderColor: '#F1F5F9' },
+  referenceBox: { marginTop: 5, paddingHorizontal: 10, borderRightWidth: 2, borderRightColor: '#CBD5E1' },
+  referenceLabel: { fontSize: 10, color: '#94A3B8', fontStyle: 'italic', textAlign: 'right' },
   replyBtn: { backgroundColor: '#3B82F6', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 8 },
   replyBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 12, marginBottom: 10, textAlign: 'right', fontSize: 13 },

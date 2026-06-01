@@ -180,8 +180,11 @@ export default function SchoolScreen({ route, navigation }) {
   };
 
   const handleAction = async (action, item = null) => {
-    if (isExpired && action !== 'delete' && action !== 'save_social') {
-      Alert.alert('تنبيه', 'يرجى تجديد الاشتراك للمتابعة');
+    if (isExpired && action !== 'delete' && action !== 'save_social' && action !== 'mark_read' && action !== 'reply') {
+      Alert.alert('تنبيه', 'انتهى اشتراك المدرسة. يرجى التواصل مع الإدارة العامة للتجديد.', [
+        { text: 'إغلاق' },
+        { text: 'رسائل الإدارة', onPress: () => setShowMsgModal(true) }
+      ]);
       return;
     }
 
@@ -300,9 +303,11 @@ export default function SchoolScreen({ route, navigation }) {
   };
 
   const handleMarkAsRead = async (msg) => {
-    if (msg.read) return;
+    const targetMsg = typeof msg === 'object' ? msg : adminMessages.find(m => m.id === msg);
+    if (!targetMsg || targetMsg.read) return;
+    
     try {
-      await saveSchoolItem(schoolId, 'messages', msg.id, { ...msg, read: true });
+      await saveSchoolItem(schoolId, 'messages', targetMsg.id, { ...targetMsg, read: true });
     } catch (e) { console.log('Error marking as read:', e); }
   };
 
@@ -342,20 +347,33 @@ export default function SchoolScreen({ route, navigation }) {
     if (!replyText.trim()) return;
     try {
       setLoading(true);
+      const senderName = user?.name || user?.username || 'مدير المدرسة';
+      
       const reply = {
         id: Date.now().toString(),
         content: replyText,
         timestamp: new Date().toISOString(),
-        sender: user?.name || 'مدير المدرسة',
+        sender: senderName,
         schoolName: dynamicSchoolName,
+        schoolId: schoolId,
         type: 'reply_to_admin',
         originalMsgId: msg.id
       };
-      // الحفظ في صندوق بريد الإدارة العامة
+
       await saveSchoolItem(schoolId, 'admin_replies', reply.id, reply);
-      Alert.alert('تم', 'تم إرسال ردك للإدارة بنجاح');
+      
+      const updatedMsg = {
+        ...msg,
+        read: true,
+        reply: replyText,
+        replyTime: reply.timestamp
+      };
+      await saveSchoolItem(schoolId, 'messages', msg.id, updatedMsg);
+
+      Alert.alert('تم', 'تم إرسال ردك بنجاح');
       setReplyText('');
     } catch (e) { 
+      console.error('Reply Error:', e);
       Alert.alert('خطأ', 'فشل إرسال الرد'); 
     } finally {
       setLoading(false);
@@ -560,7 +578,7 @@ export default function SchoolScreen({ route, navigation }) {
 
           <TouchableOpacity 
             style={styles.actionBox} 
-            onPress={() => isMainAdmin ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
+            onPress={() => (isMainAdmin || userPermissions.manage_staff || userPermissions.manage_students) ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
           >
             <Text style={styles.actionEmoji}>📍</Text>
             <Text style={styles.actionLabel}>موقع المدرسة</Text>
@@ -576,7 +594,7 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionBox} onPress={() => isMainAdmin ? setShowSocialModal(true) : null}>
+          <TouchableOpacity style={styles.actionBox} onPress={() => (isMainAdmin || isSubManager) ? setShowSocialModal(true) : null}>
             <Text style={styles.actionEmoji}>🔗</Text>
             <Text style={styles.actionLabel}>روابط التواصل</Text>
           </TouchableOpacity>
@@ -611,7 +629,7 @@ export default function SchoolScreen({ route, navigation }) {
       {activeTab === 'reports' ? renderReports() : (
       <FlatList
         data={currentData}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
         contentContainerStyle={{ padding: 15, paddingBottom: 100 }}
         renderItem={({ item }) => (
           <SchoolDataItem 
@@ -744,7 +762,7 @@ export default function SchoolScreen({ route, navigation }) {
 
             <FlatList
               data={adminMessages}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
               renderItem={({ item }) => (
                 <View style={[styles.msgItem, !item.read && { backgroundColor: '#F0F9FF', borderRightWidth: 4, borderRightColor: '#3B82F6' }]}>
                   <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -765,7 +783,7 @@ export default function SchoolScreen({ route, navigation }) {
                   </View>
                   
                   <TouchableOpacity 
-                    onPress={() => !isSelectionMode && !item.read && handleMarkAsRead(item.id)}
+                    onPress={() => !isSelectionMode && !item.read && handleMarkAsRead(item)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.msgText, { fontWeight: item.read ? 'normal' : 'bold', textAlign: 'right', color: '#334155', lineHeight: 20 }]}>
@@ -773,6 +791,15 @@ export default function SchoolScreen({ route, navigation }) {
                     </Text>
                     {!item.read && <Text style={{ fontSize: 10, color: '#3B82F6', fontWeight: 'bold', textAlign: 'left', marginTop: 5 }}>• غير مقروءة</Text>}
                   </TouchableOpacity>
+
+                  {/* عرض الرد السابق إن وجد (نظام محادثة) */}
+                  {item.reply && (
+                    <View style={styles.previousReply}>
+                      <Text style={styles.replyLabel}>ردك:</Text>
+                      <Text style={styles.replyTextContent}>{item.reply}</Text>
+                      <Text style={styles.msgTimeSmall}>{new Date(item.replyTime).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</Text>
+                    </View>
+                  )}
                   
                   {/* قسم الرد على الرسالة */}
                   {!isSelectionMode && (
@@ -781,13 +808,14 @@ export default function SchoolScreen({ route, navigation }) {
                         <TextInput 
                           style={[styles.input, { flex: 1, height: 38, fontSize: 12, backgroundColor: '#F8FAFC', paddingHorizontal: 10, borderRadius: 8 }]} 
                           placeholder="اكتب ردك هنا..." 
+                          value={replyText}
                           onChangeText={setReplyText}
                         />
                         <TouchableOpacity 
                           style={{ backgroundColor: '#3B82F6', padding: 8, borderRadius: 8, marginRight: 8 }}
                           onPress={() => handleReplyToAdmin(item)}
                         >
-                          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>رد</Text>
+                          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>إرسال</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -947,6 +975,10 @@ const styles = StyleSheet.create({
   msgItem: { marginBottom: 15, padding: 15, borderRadius: 15, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   msgDate: { fontSize: 10, color: '#94A3B8', textAlign: 'right' },
   msgText: { fontSize: 14, color: '#1E293B', textAlign: 'right', marginTop: 5 },
+  previousReply: { backgroundColor: '#F0F9FF', padding: 8, borderRadius: 8, marginTop: 10, borderRightWidth: 3, borderRightColor: '#3B82F6' },
+  replyLabel: { fontSize: 10, fontWeight: 'bold', color: '#3B82F6', marginBottom: 2, textAlign: 'right' },
+  replyTextContent: { fontSize: 12, color: '#1E293B', textAlign: 'right' },
+  msgTimeSmall: { fontSize: 9, color: '#94A3B8', marginTop: 4, textAlign: 'left' },
   inputWrapper: { marginBottom: 15 },
   inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginBottom: 5, textAlign: 'right' },
   input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' },
