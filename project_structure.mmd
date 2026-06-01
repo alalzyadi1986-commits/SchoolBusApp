@@ -1,0 +1,66 @@
+graph TD
+    APP["🚀 App.js\nNavigationContainer"]
+
+    APP --> LOGIN["🔐 LoginScreen\nتسجيل الدخول"]
+    APP --> SUPER["👑 SuperAdminScreen\nإدارة المدارس"]
+    APP --> SCHOOL["🏫 SchoolScreen\nلوحة المدرسة"]
+    APP --> DRIVER["🚌 DriverScreen\nلوحة السائق"]
+    APP --> STAFF["👩‍💼 StaffScreen\nلوحة المرافقة"]
+    APP --> PARENT["👨‍👩‍👧 ParentScreen\nتتبع الباص"]
+    APP --> TRIPS["📍 ActiveTripsScreen"]
+    APP --> TRIPMAP["🗺️ TripMapScreen"]
+    APP --> SETLOC["📌 SetSchoolLocationScreen"]
+
+    LOGIN --> AUTH_SVC["authService.js\nloginUser()"]
+    LOGIN --> SESSION["sessionService.js\nAsyncStorage"]
+
+    SUPER --> FIREBASE["☁️ Firebase\nRealtime DB"]
+
+    SCHOOL --> SCHOOL_SVC["schoolDataService.js"]
+    SCHOOL --> TRIP_SVC["tripService.js"]
+    SCHOOL --> EXPORT["exportService.js\nExcel / PDF"]
+    SCHOOL --> SCHOOL_SVC
+    TRIPS --> TRIP_SVC
+    TRIPMAP --> TRIP_SVC
+
+    DRIVER --> BUS_SVC["busService.js\nupdateBusLocation()"]
+    DRIVER --> LOC_SVC["locationService.js"]
+    DRIVER --> BG_SVC["driverBackgroundService.js\nTaskManager"]
+    DRIVER --> STU_SVC["driverStudentService.js"]
+    DRIVER --> LAF_SVC["lostAndFoundService.js"]
+
+    PARENT --> BUS_SVC
+    PARENT --> PARENT_SVC["parentBusService.js\nparentStudentService.js\nparentAlertService.js"]
+    PARENT --> LAF_SVC
+
+    STAFF --> ATT_SVC["staffAttendanceService.js"]
+    STAFF --> LAF_SVC
+
+    LAF_SVC --> NOTIF_SVC["notificationService.js\nإشعارات الأطراف"]
+
+    AUTH_SVC --> FIREBASE
+    SCHOOL_SVC --> FIREBASE
+    TRIP_SVC --> FIREBASE
+    BUS_SVC --> FIREBASE
+    STU_SVC --> FIREBASE
+    PARENT_SVC --> FIREBASE
+    ATT_SVC --> FIREBASE
+    LAF_SVC --> FIREBASE
+    NOTIF_SVC --> FIREBASE
+
+    subgraph UTILS["🔧 أدوات مشتركة"]
+        GEO["geo.js\ncalculateDistance()"]
+        NOTIF_UTIL["notifications.js\nPush Tokens"]
+        I18N["i18n.js\nAR / EN"]
+        AUTH_UTIL["auth.js ⚠️\nhashPassword() غير مستخدم"]
+        HOOK["useFirebase.js ⚠️\nغير مستخدم"]
+    end
+
+    subgraph DB_SCHEMA["☁️ هيكل Firebase"]
+        DB1["admin_settings/super_admin"]
+        DB2["userIndex/{username}"]
+        DB3["users/{username}"]
+        DB4["schools/{schoolId}/\n├── drivers\n├── students\n├── parents\n├── staff\n├── bus\n├── managers\n├── emergencies\n├── reports\n├── messages\n└── lostAndFound"]
+        DB5["trips/{schoolId}"]
+        DB6["admin_inbox/{schoolId}"]
+    end
