@@ -17,9 +17,9 @@ import { ref, onValue } from 'firebase/database';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // استيراد المكونات والخدمات (تحديث الروابط للهيكل الجديد)
-import { db } from '../../../../firebaseConfig';
-import { calculateDistance } from '../../../../utils/geo';
-import { clearUserSession } from '../../../../services/sessionService';
+import { db } from '../../../firebaseConfig';
+import { calculateDistance } from '../../../utils/geo';
+import { clearUserSession } from '../../../services/sessionService';
 
 // استيراد مكونات وخدمات وحدة ولي الأمر
 import ParentMap from '../components/ParentMap';

@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Linking from 'expo-linking'; // استخدام expo-linking بدلاً من react-native/Linking
 
 // استيراد الخدمات والمسارات الجديدة
-import { clearUserSession } from '../../../../services/sessionService';
+import { clearUserSession } from '../../../services/sessionService';
 import {
   subscribeToSchoolData,
   subscribeToSchoolInfo,
