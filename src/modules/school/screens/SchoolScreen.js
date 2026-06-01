@@ -170,10 +170,12 @@ export default function SchoolScreen({ route, navigation }) {
       if (tabId === 'drivers' || tabId === 'managers') return false; 
       
       // التحقق من الصلاحيات المخصصة للمدير الفرعي مع حماية من القيم غير المعرفة
-      if (tabId === 'staff') return !!userPermissions?.manage_staff;
-      if (tabId === 'parents' || tabId === 'students') return !!userPermissions?.manage_students;
-      if (tabId === 'reports') return !!userPermissions?.view_reports;
-      if (tabId === 'emergencies') return !!userPermissions?.handle_emergencies;
+	      if (tabId === 'staff') return !!userPermissions?.manage_staff;
+	      if (tabId === 'parents' || tabId === 'students') return !!userPermissions?.manage_students;
+	      if (tabId === 'reports') return !!userPermissions?.view_reports;
+	      if (tabId === 'emergencies') return !!userPermissions?.handle_emergencies;
+	      if (tabId === 'edit_items') return !!userPermissions?.edit_items;
+	      if (tabId === 'delete_items') return !!userPermissions?.delete_items;
       
       // تبويب افتراضي قد يحتاجه المدير الفرعي إذا لم يكن هناك قيود
       return false;
@@ -504,9 +506,9 @@ export default function SchoolScreen({ route, navigation }) {
     </View>
   );
 
-  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
-
   const insets = useSafeAreaInsets();
+
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>

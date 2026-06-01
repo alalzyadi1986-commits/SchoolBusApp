@@ -107,22 +107,24 @@ export default function SuperAdminScreen({ navigation }) {
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [showInboxModal, setShowInboxModal] = useState(false);
   const [inboxMessages, setInboxMessages] = useState([]);
-
-  // إحصائيات التقارير
-  const [reportsData, setReportsData] = useState({
-    totalSchools: 0,
-    totalBuses: 0,
-    totalStudents: 0,
-    totalParents: 0,
-    totalStaff: 0,
-    totalManagers: 0,
-    schoolsDetails: []
-  });
-  const [loadingReports, setLoadingReports] = useState(false);
-
-  const [newAdminPass, setNewAdminPass] = useState('');
-  const [msgTarget, setMsgTarget] = useState(null);
-  const [msgContent, setMsgContent] = useState('');
+	
+	  // إحصائيات التقارير
+	  const [reportsData, setReportsData] = useState({
+	    totalSchools: 0,
+	    totalBuses: 0,
+	    totalStudents: 0,
+	    totalParents: 0,
+	    totalStaff: 0,
+	    totalManagers: 0,
+	    schoolsDetails: []
+	  });
+	  const [loadingReports, setLoadingReports] = useState(false);
+	
+	  const [newAdminPass, setNewAdminPass] = useState('');
+	  const [msgTarget, setMsgTarget] = useState(null);
+	  const [msgContent, setMsgContent] = useState('');
+	  const [selectedInboxMsg, setSelectedInboxMsg] = useState(null);
+	  const [inboxReplyText, setInboxReplyText] = useState('');
 
   useEffect(() => {
     const schoolsRef = ref(db, 'schools');
@@ -288,9 +290,64 @@ export default function SuperAdminScreen({ navigation }) {
   };
 
   const formatDate = (dateStr) => {
-    try { return new Date(dateStr).toLocaleDateString('ar-EG'); }
-    catch (e) { return '---'; }
-  };
+	    try { return new Date(dateStr).toLocaleDateString('ar-EG'); }
+	    catch (e) { return '---'; }
+	  };
+	
+	  const handleMarkInboxAsRead = async (msg) => {
+	    if (msg.read) return;
+	    try {
+	      await update(ref(db, `admin_inbox/${msg.schoolId}/${msg.id}`), { read: true });
+	    } catch (e) { console.log('Error marking as read:', e); }
+	  };
+	
+	  const handleDeleteInboxMsg = async (msg) => {
+	    Alert.alert('حذف الرسالة', 'هل أنت متأكد من حذف هذه الرسالة؟', [
+	      { text: 'إلغاء', style: 'cancel' },
+	      { text: 'حذف', style: 'destructive', onPress: async () => {
+	        try {
+	          await remove(ref(db, `admin_inbox/${msg.schoolId}/${msg.id}`));
+	          setSelectedInboxMsg(null);
+	        } catch (e) { Alert.alert('خطأ', 'فشل الحذف'); }
+	      }}
+	    ]);
+	  };
+	
+	  const handleReplyToInbox = async () => {
+	    if (!inboxReplyText.trim() || !selectedInboxMsg) return;
+	    setLoading(true);
+	    try {
+	      const reply = {
+	        id: Date.now().toString(),
+	        content: inboxReplyText,
+	        sender: 'المدير العام',
+	        timestamp: new Date().toISOString(),
+	        type: 'reply',
+	        originalMsgId: selectedInboxMsg.id
+	      };
+	      await push(ref(db, `schools/${selectedInboxMsg.schoolId}/messages`), reply);
+	      await handleMarkInboxAsRead(selectedInboxMsg);
+	      Alert.alert('نجاح', 'تم إرسال الرد بنجاح');
+	      setInboxReplyText('');
+	      setSelectedInboxMsg(null);
+	    } catch (e) { Alert.alert('خطأ', 'فشل إرسال الرد'); }
+	    finally { setLoading(false); }
+	  };
+	
+	  const handleChangeAdminPassword = async () => {
+	    if (!newAdminPass.trim()) {
+	      Alert.alert('خطأ', 'يرجى إدخال كلمة السر الجديدة');
+	      return;
+	    }
+	    setLoading(true);
+	    try {
+	      await update(ref(db, 'users/admin'), { password: newAdminPass });
+	      Alert.alert('نجاح', 'تم تغيير كلمة السر بنجاح');
+	      setNewAdminPass('');
+	      setShowPassModal(false);
+	    } catch (e) { Alert.alert('خطأ', 'فشل تغيير كلمة السر'); }
+	    finally { setLoading(false); }
+	  };
 
   const fetchReports = async () => {
     setLoadingReports(true);
@@ -449,13 +506,13 @@ export default function SuperAdminScreen({ navigation }) {
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>{editingSchoolId ? 'تعديل بيانات المدرسة' : 'إضافة مدرسة جديدة'}</Text>
-              <div style={styles.logoSection}>
-                <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
-                  {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} /> : (
-                    <View style={styles.uploadPlaceholder}><Text style={{ fontSize: 30 }}>📸</Text><Text style={styles.uploadText}>رفع الشعار</Text></View>
-                  )}
-                </TouchableOpacity>
-              </div>
+	              <View style={styles.logoSection}>
+	                <TouchableOpacity style={styles.logoUpload} onPress={pickImage}>
+	                  {logoUrl ? <Image source={{ uri: logoUrl }} style={styles.uploadedLogo} /> : (
+	                    <View style={styles.uploadPlaceholder}><Text style={{ fontSize: 30 }}>📸</Text><Text style={styles.uploadText}>رفع الشعار</Text></View>
+	                  )}
+	                </TouchableOpacity>
+	              </View>
               <TextInput style={styles.input} placeholder="اسم المدرسة (انجليزي)" value={schoolName} onChangeText={setSchoolName} />
               <TextInput style={styles.input} placeholder="اسم المدرسة للعرض (عربي)" value={displayName} onChangeText={setDisplayName} />
               <TextInput style={styles.input} placeholder="رابط جوجل مابس" value={googleMapsLink} onChangeText={setGoogleMapsLink} />
@@ -549,32 +606,89 @@ export default function SuperAdminScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* مودال صندوق الوارد */}
-      <Modal visible={showInboxModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: '95%', maxHeight: '85%' }]}>
-            <Text style={styles.modalTitle}>📥 الرسائل الواردة من المدارس</Text>
-            <FlatList
-              data={inboxMessages}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View style={styles.msgCard}>
-                  <View style={styles.msgHeader}>
-                    <Text style={styles.msgSchool}>{item.schoolName || 'مدرسة'}</Text>
-                    <Text style={styles.msgTime}>{formatDate(item.timestamp)}</Text>
-                  </View>
-                  <Text style={styles.msgContent}>{item.content}</Text>
-                  <Text style={styles.msgSender}>بواسطة: {item.sender}</Text>
-                </View>
-              )}
-              ListEmptyComponent={<Text style={styles.emptyText}>لا توجد رسائل واردة</Text>}
-            />
-            <TouchableOpacity style={styles.closeModalBtn} onPress={() => setShowInboxModal(false)}>
-              <Text style={styles.closeModalText}>إغلاق</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+	      {/* مودال تغيير كلمة السر */}
+	      <Modal visible={showPassModal} animationType="fade" transparent>
+	        <View style={styles.modalOverlay}>
+	          <View style={styles.modalContent}>
+	            <Text style={styles.modalTitle}>🔐 تغيير كلمة سر المدير العام</Text>
+	            <TextInput 
+	              style={styles.input} 
+	              placeholder="كلمة السر الجديدة" 
+	              value={newAdminPass} 
+	              onChangeText={setNewAdminPass}
+	              secureTextEntry
+	            />
+	            <View style={styles.modalActions}>
+	              <TouchableOpacity style={[styles.modalAction, styles.saveBtn]} onPress={handleChangeAdminPassword} disabled={loading}>
+	                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalActionText}>تحديث 💾</Text>}
+	              </TouchableOpacity>
+	              <TouchableOpacity style={[styles.modalAction, styles.cancelBtn]} onPress={() => setShowPassModal(false)}>
+	                <Text style={styles.modalActionText}>إلغاء</Text>
+	              </TouchableOpacity>
+	            </View>
+	          </View>
+	        </View>
+	      </Modal>
+	
+	      {/* مودال صندوق الوارد */}
+	      <Modal visible={showInboxModal} animationType="slide" transparent>
+	        <View style={styles.modalOverlay}>
+	          <View style={[styles.modalContent, { width: '95%', maxHeight: '85%' }]}>
+	            <Text style={styles.modalTitle}>📥 الرسائل الواردة من المدارس</Text>
+	            <FlatList
+	              data={inboxMessages}
+	              keyExtractor={(item) => item.id}
+	              renderItem={({ item }) => (
+	                <TouchableOpacity 
+	                  style={[styles.msgCard, !item.read && { borderRightWidth: 4, borderRightColor: '#EF4444' }]} 
+	                  onPress={() => { setSelectedInboxMsg(item); handleMarkInboxAsRead(item); }}
+	                >
+	                  <View style={styles.msgHeader}>
+	                    <Text style={styles.msgSchool}>{item.schoolName || 'مدرسة'}</Text>
+	                    <Text style={styles.msgTime}>{formatDate(item.timestamp)}</Text>
+	                  </View>
+	                  <Text style={styles.msgContent} numberOfLines={2}>{item.content}</Text>
+	                  <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 5 }}>
+	                    <Text style={styles.msgSender}>بواسطة: {item.sender}</Text>
+	                    {!item.read && <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: 'bold' }}>جديدة 🔴</Text>}
+	                  </View>
+	                </TouchableOpacity>
+	              )}
+	              ListEmptyComponent={<Text style={styles.emptyText}>لا توجد رسائل واردة</Text>}
+	            />
+	
+	            {selectedInboxMsg && (
+	              <View style={styles.replySection}>
+	                <View style={styles.selectedMsgPreview}>
+	                  <Text style={styles.previewText}>{selectedInboxMsg.content}</Text>
+	                  <TouchableOpacity onPress={() => handleDeleteInboxMsg(selectedInboxMsg)}>
+	                    <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>حذف 🗑️</Text>
+	                  </TouchableOpacity>
+	                </View>
+	                <TextInput 
+	                  style={styles.msgInput} 
+	                  placeholder="اكتب ردك هنا..." 
+	                  value={inboxReplyText} 
+	                  onChangeText={setInboxReplyText}
+	                  multiline
+	                />
+	                <View style={styles.modalActions}>
+	                  <TouchableOpacity style={[styles.modalAction, styles.saveBtn]} onPress={handleReplyToInbox} disabled={loading}>
+	                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalActionText}>إرسال الرد 🚀</Text>}
+	                  </TouchableOpacity>
+	                  <TouchableOpacity style={[styles.modalAction, styles.cancelBtn]} onPress={() => setSelectedInboxMsg(null)}>
+	                    <Text style={styles.modalActionText}>إغلاق الرد</Text>
+	                  </TouchableOpacity>
+	                </View>
+	              </View>
+	            )}
+	
+	            <TouchableOpacity style={styles.closeModalBtn} onPress={() => setShowInboxModal(false)}>
+	              <Text style={styles.closeModalText}>إغلاق الصندوق</Text>
+	            </TouchableOpacity>
+	          </View>
+	        </View>
+	      </Modal>
     </SafeAreaView>
   );
 }
@@ -642,5 +756,8 @@ const styles = StyleSheet.create({
   msgSchool: { fontWeight: 'bold', color: '#1E293B' },
   msgTime: { fontSize: 10, color: '#94A3B8' },
   msgContent: { fontSize: 13, color: '#475569', textAlign: 'right', lineHeight: 20 },
-  msgSender: { fontSize: 11, color: '#3B82F6', marginTop: 5, textAlign: 'right', fontWeight: 'bold' }
+  msgSender: { fontSize: 11, color: '#3B82F6', marginTop: 5, textAlign: 'right', fontWeight: 'bold' },
+  replySection: { marginTop: 20, padding: 15, backgroundColor: '#F0F9FF', borderRadius: 20, borderTopWidth: 2, borderTopColor: '#3B82F6' },
+  selectedMsgPreview: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#BAE6FD' },
+  previewText: { flex: 1, fontSize: 12, color: '#0369A1', fontStyle: 'italic', textAlign: 'right', marginLeft: 10 }
 });
