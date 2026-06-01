@@ -1,0 +1,156 @@
+graph TD
+    subgraph ENTRY["🚀 نقطة الدخول"]
+        IDX["index.js\nregisterRootComponent"]
+        APP["App.js\nNavigationContainer\nStack.Navigator"]
+    end
+
+    subgraph AUTH["🔐 وحدة المصادقة (auth)"]
+        LS["LoginScreen.js\n- تسجيل الدخول\n- تذكر البيانات\n- تبديل اللغة"]
+        AS["authService.js\n- loginUser()\n- التحقق من superadmin\n- التحقق من الاشتراك"]
+    end
+
+    subgraph ADMIN["👑 وحدة المدير العام (admin)"]
+        SAS["SuperAdminScreen.js\n- إدارة المدارس\n- إضافة/تعديل/حذف\n- إيقاف/تفعيل\n- إرسال رسائل"]
+    end
+
+    subgraph SCHOOL["🏫 وحدة المدرسة (school)"]
+        SS["SchoolScreen.js\n- لوحة تحكم المدرسة\n- إدارة السائقين/الطلاب/الأهل\n- الإعلانات والرسائل\n- التقارير والطوارئ"]
+        ATS["ActiveTripsScreen.js\n- عرض الرحلات النشطة"]
+        TMS["TripMapScreen.js\n- خريطة الرحلة المباشرة"]
+        SLS["SetSchoolLocationScreen.js\n- تحديد موقع المدرسة"]
+        SDS["schoolDataService.js\n- CRUD البيانات"]
+        TS["tripService.js\n- مراقبة الرحلات"]
+        ES["exportService.js\n- تصدير Excel/PDF"]
+        SC["SchoolComponents.js\n- SchoolDataItem"]
+    end
+
+    subgraph DRIVER["🚌 وحدة السائق (driver)"]
+        DS["DriverScreen.js\n- لوحة السائق\n- بدء/إنهاء الرحلة\n- عرض الطلاب\n- المفقودات"]
+        DM["DriverMap.js\n- خريطة السائق"]
+        SI["StudentItem.js\n- بطاقة الطالب"]
+        DLS["driverLocationService.js\n- تتبع الموقع الأمامي"]
+        DBS["driverBackgroundService.js\n- تتبع الخلفية\n- TaskManager"]
+        DTS["driverTripService.js\n- startDriverTrip()\n- stopDriverTrip()"]
+        DSS["driverStudentService.js\n- subscribeToDriverStudents()"]
+    end
+
+    subgraph PARENT["👨‍👩‍👧 وحدة ولي الأمر (parent)"]
+        PS["ParentScreen.js\n- تتبع الباص\n- حالة الطالب\n- الغياب\n- المفقودات"]
+        PM["ParentMap.js\n- خريطة ولي الأمر"]
+        PBS["parentBusService.js\n- subscribeToBusLocation()"]
+        PLS["parentLocationService.js\n- getParentLocation()"]
+        PAS["parentAlertService.js\n- checkBusArrivalAlert()"]
+        PSS["parentStudentService.js\n- subscribeToParentStudent()"]
+        PSCS["parentSchoolService.js\n- subscribeToSchoolInfo()"]
+    end
+
+    subgraph STAFF["👩‍💼 وحدة المرافقة (staff)"]
+        STS["StaffScreen.js\n- تحضير الطلاب\n- المفقودات"]
+        SAS2["staffAttendanceService.js\n- updateStudentAttendance()\n- getParentPhone()"]
+    end
+
+    subgraph LAF["📦 وحدة المفقودات (lostAndFound)"]
+        LAFS["lostAndFoundService.js\n- addFoundItem()\n- reportLostItem()\n- claimItem()\n- resolveItem()"]
+        NS["notificationService.js\n- إشعارات الأطراف"]
+        LAFC["LostAndFoundComponents.js\n- LostAndFoundItemCard\n- AddFoundItemForm"]
+    end
+
+    subgraph SHARED["🔧 الخدمات المشتركة (services & utils)"]
+        FC["firebaseConfig.js\n- db, storage"]
+        BSV["busService.js\n- updateBusLocation()"]
+        LOCSV["locationService.js\n- requestPermission()\n- getCurrentLocation()"]
+        SESS["sessionService.js\n- AsyncStorage\n- save/get/clear"]
+        GEO["geo.js\n- calculateDistance()"]
+        NOTIF["notifications.js\n- registerForPushNotifications()\n- sendLocalNotification()"]
+        AUTH2["auth.js\n- hashPassword() ⚠️غير مستخدم"]
+        HK["useFirebase.js\n- useFirebaseList() ⚠️غير مستخدم"]
+        I18N["i18n.js\n- translations (ar/en)"]
+    end
+
+    subgraph FIREBASE["☁️ Firebase Realtime Database"]
+        FB_ADMIN["admin_settings/\n- super_admin"]
+        FB_USERS["users/\n- بيانات المستخدمين"]
+        FB_IDX["userIndex/\n- فهرس المستخدمين"]
+        FB_SCHOOLS["schools/{schoolId}/\n- drivers, students\n- parents, staff\n- bus, managers\n- emergencies, reports\n- messages, lostAndFound"]
+        FB_TRIPS["trips/{schoolId}/\n- الرحلات النشطة"]
+        FB_INBOX["admin_inbox/{schoolId}/\n- رسائل للسوبر أدمن"]
+    end
+
+    IDX --> APP
+    APP --> LS
+    APP --> SAS
+    APP --> SS
+    APP --> DS
+    APP --> STS
+    APP --> PS
+    APP --> ATS
+    APP --> TMS
+    APP --> SLS
+
+    LS --> AS
+    AS --> FC
+    AS --> FB_ADMIN
+    AS --> FB_USERS
+    AS --> FB_IDX
+
+    SAS --> FC
+    SAS --> FB_SCHOOLS
+    SAS --> FB_USERS
+    SAS --> FB_IDX
+    SAS --> FB_INBOX
+
+    SS --> SDS
+    SS --> TS
+    SS --> ES
+    SS --> SC
+    SS --> SESS
+    SDS --> FC
+    SDS --> FB_SCHOOLS
+    TS --> FC
+    TS --> FB_TRIPS
+    ATS --> TS
+    TMS --> TS
+    SLS --> SDS
+
+    DS --> DM
+    DS --> SI
+    DS --> DLS
+    DS --> DBS
+    DS --> DSS
+    DS --> LAFS
+    DS --> SESS
+    DLS --> BSV
+    DBS --> BSV
+    BSV --> FC
+    BSV --> FB_SCHOOLS
+    DSS --> FC
+    DSS --> FB_SCHOOLS
+
+    PS --> PM
+    PS --> PBS
+    PS --> PLS
+    PS --> PAS
+    PS --> PSS
+    PS --> PSCS
+    PS --> LAFS
+    PS --> SESS
+    PBS --> FC
+    PBS --> FB_SCHOOLS
+    PSS --> FC
+    PSS --> FB_SCHOOLS
+
+    STS --> SAS2
+    STS --> LAFS
+    STS --> SESS
+    SAS2 --> FC
+    SAS2 --> FB_SCHOOLS
+
+    LAFS --> FC
+    LAFS --> FB_SCHOOLS
+    NS --> NOTIF
+    NS --> FC
+    NS --> FB_SCHOOLS
+
+    LOCSV --> DLS
+    GEO --> PAS
+    NOTIF --> NS
