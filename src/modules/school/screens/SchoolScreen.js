@@ -688,15 +688,62 @@ export default function SchoolScreen({ route, navigation }) {
       />
       )}
 
-	      {/* زر الإضافة */}
+	      {/* زر الإضافة المطور */}
 	      {(isMainAdmin || userPermissions?.edit_items) && activeTab !== 'reports' && (
-	        <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
-	          <Text style={styles.addBtnText}>إضافة جديد</Text>
+	        <TouchableOpacity 
+	          style={[styles.addBtn, { backgroundColor: '#10B981', shadowColor: '#10B981' }]} 
+	          onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}
+	        >
+	          <Text style={styles.addBtnText}>➕ إضافة جديد</Text>
 	        </TouchableOpacity>
 	      )}
 
-      {/* مودال روابط التواصل الاجتماعي */}
-      <Modal visible={showSocialModal} transparent animationType="fade">
+	      {/* مودال الإعلان العام */}
+	      <Modal visible={showBroadcastModal} transparent animationType="fade">
+	        <View style={styles.modalOverlay}>
+	          <View style={styles.modalContent}>
+	            <Text style={styles.modalTitle}>📢 إرسال إعلان عام</Text>
+	            <View style={styles.targetContainer}>
+	              <TouchableOpacity 
+	                style={[styles.targetBtn, broadcastTarget === 'all' && styles.targetBtnActive]} 
+	                onPress={() => setBroadcastTarget('all')}
+	              >
+	                <Text style={[styles.targetText, broadcastTarget === 'all' && styles.targetTextActive]}>الكل</Text>
+	              </TouchableOpacity>
+	              <TouchableOpacity 
+	                style={[styles.targetBtn, broadcastTarget === 'parents' && styles.targetBtnActive]} 
+	                onPress={() => setBroadcastTarget('parents')}
+	              >
+	                <Text style={[styles.targetText, broadcastTarget === 'parents' && styles.targetTextActive]}>أولياء الأمور</Text>
+	              </TouchableOpacity>
+	              <TouchableOpacity 
+	                style={[styles.targetBtn, broadcastTarget === 'drivers' && styles.targetBtnActive]} 
+	                onPress={() => setBroadcastTarget('drivers')}
+	              >
+	                <Text style={[styles.targetText, broadcastTarget === 'drivers' && styles.targetTextActive]}>السائقين</Text>
+	              </TouchableOpacity>
+	            </View>
+	            <TextInput
+	              style={styles.msgInput}
+	              placeholder="اكتب محتوى الإعلان هنا..."
+	              value={broadcastContent}
+	              onChangeText={setBroadcastContent}
+	              multiline
+	            />
+	            <View style={styles.modalBtns}>
+	              <TouchableOpacity style={[styles.modalBtn, styles.sendBtn]} onPress={handleSendBroadcast}>
+	                <Text style={styles.modalBtnText}>إرسال الآن</Text>
+	              </TouchableOpacity>
+	              <TouchableOpacity style={[styles.modalBtn, styles.closeBtn, { marginTop: 0 }]} onPress={() => setShowBroadcastModal(false)}>
+	                <Text style={styles.modalBtnText}>إلغاء</Text>
+	              </TouchableOpacity>
+	            </View>
+	          </View>
+	        </View>
+	      </Modal>
+
+	      {/* مودال روابط التواصل الاجتماعي */}
+	      <Modal visible={showSocialModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>روابط التواصل الاجتماعي</Text>
@@ -938,21 +985,21 @@ const styles = StyleSheet.create({
   logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
   logoutText: { color: '#EF4444', fontWeight: 'bold' },
   statsContainer: { flexDirection: 'row-reverse', padding: 15, justifyContent: 'space-between' },
-  statCard: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 12, marginHorizontal: 4, alignItems: 'center', elevation: 2, borderRightWidth: 4 },
-  statValue: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  statLabel: { fontSize: 10, color: '#64748B', marginTop: 2 },
-  quickActionsGrid: { paddingHorizontal: 15, marginTop: 10 },
-  actionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 10 },
-  actionBox: { width: '23.5%', aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 12, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, position: 'relative', borderWidth: 1, borderColor: '#F1F5F9' },
-  emptyBox: { width: '23.5%', aspectRatio: 1 },
-  actionEmoji: { fontSize: 22, marginBottom: 4 },
-  actionLabel: { fontSize: 9, fontWeight: 'bold', color: '#475569', textAlign: 'center' },
+  statCard: { flex: 1, backgroundColor: '#FFF', padding: 12, borderRadius: 16, marginHorizontal: 5, alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderRightWidth: 5 },
+  statValue: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
+  statLabel: { fontSize: 11, color: '#64748B', marginTop: 4, fontWeight: '600' },
+  quickActionsGrid: { paddingHorizontal: 15, marginTop: 15 },
+  actionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 12 },
+  actionBox: { width: '23%', aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, position: 'relative', borderWidth: 1, borderColor: '#F1F5F9' },
+  emptyBox: { width: '23%', aspectRatio: 1 },
+  actionEmoji: { fontSize: 24, marginBottom: 6 },
+  actionLabel: { fontSize: 10, fontWeight: 'bold', color: '#475569', textAlign: 'center' },
   badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#FFF' },
   badgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
   tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
-  tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: '#F1F5F9' },
-  tabActive: { backgroundColor: '#3B82F6' },
+  tab: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 25, marginRight: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  tabActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6', elevation: 4, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
   tabText: { fontSize: 14, color: '#64748B', fontWeight: 'bold' },
   tabTextActive: { color: '#FFF' },
   searchWrapper: { padding: 15 },
