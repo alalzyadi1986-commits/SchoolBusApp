@@ -5,8 +5,8 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-nativ
  * مكون بطاقة المعلومات الموحد داخل المدرسة
  */
 export const SchoolDataItem = React.memo(({ item, tab, onEdit, onDelete, permissions }) => {
-  const canEdit = permissions.edit_items;
-  const canDelete = permissions.delete_items;
+  const canEdit = permissions?.edit_items;
+  const canDelete = permissions?.delete_items;
 
   return (
     <View style={styles.card}>
