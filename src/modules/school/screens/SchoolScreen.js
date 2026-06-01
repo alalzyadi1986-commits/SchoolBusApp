@@ -459,13 +459,13 @@ export default function SchoolScreen({ route, navigation }) {
         <Text style={[styles.cardTitle, { marginBottom: 15 }]}>📥 تصدير البيانات</Text>
         <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%' }}>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#10B981', width: '45%' }]}}
+            style={[styles.actionButton, { backgroundColor: '#10B981', width: '45%' }]}
             onPress={() => exportToExcel(students, "جدول الطلاب", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير الطلاب (Excel)</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#EF4444', width: '45%' }]}}
+            style={[styles.actionButton, { backgroundColor: '#EF4444', width: '45%' }]}
             onPress={() => exportToPDF(students, "جدول الطلاب", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير الطلاب (PDF)</Text>
@@ -474,13 +474,13 @@ export default function SchoolScreen({ route, navigation }) {
         
         <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%', marginTop: 10 }}>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#3B82F6', width: '45%' }]}}
+            style={[styles.actionButton, { backgroundColor: '#3B82F6', width: '45%' }]}
             onPress={() => exportToExcel(drivers, "جدول السائقين", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير السائقين (Excel)</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#8B5CF6', width: '45%' }]}}
+            style={[styles.actionButton, { backgroundColor: '#8B5CF6', width: '45%' }]}
             onPress={() => exportToPDF(drivers, "جدول السائقين", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير السائقين (PDF)</Text>
@@ -563,7 +563,7 @@ export default function SchoolScreen({ route, navigation }) {
           )}
           {(isMainAdmin || userPermissions.handle_emergencies) && (
             <TouchableOpacity 
-              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}}
+              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
               onPress={() => setActiveTab('emergencies')}
             >
               <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
@@ -819,13 +819,13 @@ export default function SchoolScreen({ route, navigation }) {
                 />
                 <View style={styles.replyActions}>
                   <TouchableOpacity 
-                    style={[styles.replyBtn, { backgroundColor: '#3B82F6' }]}}
+                    style={[styles.replyBtn, { backgroundColor: '#3B82F6' }]}
                     onPress={handleReplyToAdmin}
                   >
                     <Text style={styles.replyBtnText}>إرسال الرد</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[styles.replyBtn, { backgroundColor: '#EF4444' }]}}
+                    style={[styles.replyBtn, { backgroundColor: '#EF4444' }]}
                     onPress={() => setSelectedMessageForReply(null)}
                   >
                     <Text style={styles.replyBtnText}>إلغاء</Text>
