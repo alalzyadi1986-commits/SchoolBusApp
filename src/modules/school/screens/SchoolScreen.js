@@ -72,6 +72,7 @@ export default function SchoolScreen({ route, navigation }) {
 
   // ميزة الإعلانات المدرسية
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
   const [broadcastTarget, setBroadcastTarget] = useState('all'); // 'all', 'parents', 'drivers'
   const [broadcastContent, setBroadcastContent] = useState('');
 
@@ -402,6 +403,41 @@ export default function SchoolScreen({ route, navigation }) {
     );
   }, [activeTab, drivers, staff, parents, students, managers, reports, emergencies, searchQuery]);
 
+  const complianceAlerts = useMemo(() => {
+    const alerts = [];
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+    drivers.forEach(d => {
+      const checkExpiry = (dateStr, label) => {
+        if (!dateStr) return;
+        const expiryDate = new Date(dateStr);
+        if (isNaN(expiryDate.getTime())) return;
+        
+        const diffTime = expiryDate - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays <= 30) {
+          alerts.push({
+            id: `${d.id}-${label}`,
+            driverName: d.name,
+            label: label,
+            daysLeft: diffDays,
+            isExpired: diffDays <= 0
+          });
+        }
+      };
+
+      checkExpiry(d.driverLicenseExpiry, 'رخصة القيادة');
+      checkExpiry(d.busInsuranceExpiry, 'تأمين الحافلة');
+      checkExpiry(d.busLicenseExpiry, 'رخصة الحافلة');
+      checkExpiry(d.oilChangeDate, 'غيار الزيت');
+    });
+
+    return alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [drivers]);
+
   const stats = useMemo(() => {
     return {
       buses: drivers.length,
@@ -409,9 +445,10 @@ export default function SchoolScreen({ route, navigation }) {
       staff: staff.length,
       parents: parents.length,
       emergencies: emergencies.filter(e => !e.resolved).length,
-      activeTrips: drivers.filter(d => d.isOnline).length
+      activeTrips: drivers.filter(d => d.isOnline).length,
+      complianceAlerts: complianceAlerts.length
     };
-  }, [drivers, students, staff, parents, emergencies]);
+  }, [drivers, students, staff, parents, emergencies, complianceAlerts]);
 
   const renderReports = () => (
     <ScrollView style={{ padding: 15 }}>
@@ -518,6 +555,10 @@ export default function SchoolScreen({ route, navigation }) {
       <StatusBar barStyle="dark-content" />
       <View style={styles.imgHeader}>
         <View style={styles.imgHeaderLeft}>
+          <TouchableOpacity style={styles.imgIconBtn} onPress={() => setShowComplianceModal(true)}>
+            <Text style={{ fontSize: 24 }}>⚠️</Text>
+            {complianceAlerts.length > 0 && <View style={[styles.imgBadge, { backgroundColor: '#F59E0B' }]} />}
+          </TouchableOpacity>
           <TouchableOpacity style={styles.imgIconBtn} onPress={() => setShowMsgModal(true)}>
             <Text style={{ fontSize: 24 }}>🔔</Text>
             {adminMessages.filter(m => !m.read).length > 0 && <View style={styles.imgBadge} />}
@@ -893,6 +934,53 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </Modal>
 
+      {/* مودال إدارة الأسطول والأوراق القانونية */}
+      <Modal visible={showComplianceModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { height: '70%', padding: 20 }]}>
+            <Text style={[styles.modalTitle, { color: '#1E293B' }]}>📑 إدارة الأسطول والأوراق القانونية</Text>
+            <Text style={{ textAlign: 'center', color: '#64748B', marginBottom: 15 }}>تنبيهات تلقائية للأوراق التي تنتهي خلال 30 يوماً</Text>
+            
+            {complianceAlerts.length > 0 ? (
+              <FlatList
+                data={complianceAlerts}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <View style={{ 
+                    backgroundColor: item.isExpired ? '#FEF2F2' : '#FFFBEB', 
+                    padding: 15, 
+                    borderRadius: 12, 
+                    marginBottom: 10,
+                    borderRightWidth: 4,
+                    borderRightColor: item.isExpired ? '#EF4444' : '#F59E0B',
+                    flexDirection: 'row-reverse',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                      <Text style={{ fontWeight: 'bold', color: '#1E293B' }}>{item.label} - {item.driverName}</Text>
+                      <Text style={{ color: item.isExpired ? '#EF4444' : '#F59E0B', fontSize: 12, marginTop: 2 }}>
+                        {item.isExpired ? '⚠️ منتهية الصلاحية!' : `تنتهي خلال ${item.daysLeft} يوماً`}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 20 }}>{item.isExpired ? '🚫' : '⏳'}</Text>
+                  </View>
+                )}
+              />
+            ) : (
+              <View style={styles.centered}>
+                <Text style={{ fontSize: 40, marginBottom: 10 }}>✅</Text>
+                <Text style={{ color: '#64748B', textAlign: 'center' }}>جميع الأوراق الرسمية محدثة وسليمة حالياً</Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={[styles.closeBtn, { marginTop: 15 }]} onPress={() => setShowComplianceModal(false)}>
+              <Text style={styles.closeBtnText}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* مركز التواصل الموحد */}
       <Modal visible={showMsgModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -992,9 +1080,18 @@ export default function SchoolScreen({ route, navigation }) {
             {renderInput('اسم المستخدم', 'username')}
             {renderInput('كلمة السر', 'password')}
             
-            {activeTab === 'drivers' && renderInput('رقم الجوال', 'phone', true)}
-            {activeTab === 'drivers' && renderInput('رقم اللوحة', 'busPlate')}
-            {activeTab === 'students' && renderInput('الصف', 'class')}
+	            {activeTab === 'drivers' && renderInput('رقم الجوال', 'phone', true)}
+	            {activeTab === 'drivers' && renderInput('رقم اللوحة', 'busPlate')}
+	            {activeTab === 'drivers' && (
+	              <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, marginTop: 10 }}>
+	                <Text style={[styles.inputLabel, { color: '#3B82F6' }]}>📑 الأوراق الرسمية (السائق والحافلة):</Text>
+	                {renderInput('تاريخ انتهاء رخصة السائق', 'driverLicenseExpiry')}
+	                {renderInput('تاريخ انتهاء تأمين الحافلة', 'busInsuranceExpiry')}
+	                {renderInput('تاريخ انتهاء رخصة الحافلة', 'busLicenseExpiry')}
+	                {renderInput('موعد غيار الزيت القادم', 'oilChangeDate')}
+	              </View>
+	            )}
+	            {activeTab === 'students' && renderInput('الصف', 'class')}
             
             {activeTab === 'students' && (
               <View style={styles.inputWrapper}>
