@@ -545,61 +545,61 @@ export default function SchoolScreen({ route, navigation }) {
       <View style={{ marginTop: 10 }}>
         <Text style={[styles.inputLabel, { marginRight: 15, marginBottom: 5, fontSize: 16, color: '#1E293B' }]}>📊 الإحصائية العامة</Text>
         <View style={styles.statsContainer}>
-          {(isMainAdmin || (isSubManager && userPermissions.view_buses)) && (
-            <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
-              <Text style={styles.statValue}>{stats.buses}</Text>
-              <Text style={styles.statLabel}>باصات</Text>
-            </View>
-          )}
-          {(isMainAdmin || userPermissions.manage_students) && (
-            <View style={[styles.statCard, { borderRightColor: '#10B981' }]}>
-              <Text style={styles.statValue}>{stats.students}</Text>
-              <Text style={styles.statLabel}>طلاب</Text>
-            </View>
-          )}
-          {(isMainAdmin || (isSubManager && userPermissions.view_active_trips)) && (
-            <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
-              <Text style={styles.statValue}>{stats.activeTrips}</Text>
-              <Text style={styles.statLabel}>رحلات نشطة</Text>
-            </View>
-          )}
-          {(isMainAdmin || userPermissions.handle_emergencies) && (
-            <TouchableOpacity 
-              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
-              onPress={() => setActiveTab('emergencies')}
-            >
-              <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
-              <Text style={styles.statLabel}>طوارئ</Text>
-            </TouchableOpacity>
-          )}
+          {(isMainAdmin || (isSubManager && userPermissions?.view_buses)) && (
+	            <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
+	              <Text style={styles.statValue}>{stats.buses}</Text>
+	              <Text style={styles.statLabel}>باصات</Text>
+	            </View>
+	          )}
+	          {(isMainAdmin || userPermissions?.manage_students) && (
+	            <View style={[styles.statCard, { borderRightColor: '#10B981' }]}>
+	              <Text style={styles.statValue}>{stats.students}</Text>
+	              <Text style={styles.statLabel}>طلاب</Text>
+	            </View>
+	          )}
+	          {(isMainAdmin || (isSubManager && userPermissions?.view_active_trips)) && (
+	            <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
+	              <Text style={styles.statValue}>{stats.activeTrips}</Text>
+	              <Text style={styles.statLabel}>رحلات نشطة</Text>
+	            </View>
+	          )}
+	          {(isMainAdmin || userPermissions?.handle_emergencies) && (
+	            <TouchableOpacity 
+	              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
+	              onPress={() => setActiveTab('emergencies')}
+	            >
+	              <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
+	              <Text style={styles.statLabel}>طوارئ</Text>
+	            </TouchableOpacity>
+	          )}
         </View>
       </View>
 
-      <View style={styles.quickActionsGrid}>
-        <View style={styles.actionRow}>
-          <TouchableOpacity 
-            style={styles.actionBox} 
-            onPress={() => (isMainAdmin || userPermissions.view_active_trips) ? navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName }) : null}
-          >
-            <Text style={styles.actionEmoji}>📡</Text>
-            <Text style={styles.actionLabel}>مراقبة حية</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionBox} 
-            onPress={() => (isMainAdmin || userPermissions.send_broadcasts) ? setShowBroadcastModal(true) : null}
-          >
-            <Text style={styles.actionEmoji}>📢</Text>
-            <Text style={styles.actionLabel}>إعلان عام</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionBox} 
-            onPress={() => (isMainAdmin || userPermissions.manage_staff || userPermissions.manage_students) ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
-          >
-            <Text style={styles.actionEmoji}>📍</Text>
-            <Text style={styles.actionLabel}>موقع المدرسة</Text>
-          </TouchableOpacity>
+	      <View style={styles.quickActionsGrid}>
+	        <View style={styles.actionRow}>
+	          <TouchableOpacity 
+	            style={styles.actionBox} 
+	            onPress={() => (isMainAdmin || userPermissions?.view_active_trips) ? navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName }) : null}
+	          >
+	            <Text style={styles.actionEmoji}>📡</Text>
+	            <Text style={styles.actionLabel}>مراقبة حية</Text>
+	          </TouchableOpacity>
+	
+	          <TouchableOpacity 
+	            style={styles.actionBox} 
+	            onPress={() => (isMainAdmin || userPermissions?.send_broadcasts) ? setShowBroadcastModal(true) : null}
+	          >
+	            <Text style={styles.actionEmoji}>📢</Text>
+	            <Text style={styles.actionLabel}>إعلان عام</Text>
+	          </TouchableOpacity>
+	
+	          <TouchableOpacity 
+	            style={styles.actionBox} 
+	            onPress={() => (isMainAdmin || userPermissions?.manage_staff || userPermissions?.manage_students) ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
+	          >
+	            <Text style={styles.actionEmoji}>📍</Text>
+	            <Text style={styles.actionLabel}>موقع المدرسة</Text>
+	          </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionBox} onPress={() => setShowMsgModal(true)}>
             <Text style={styles.actionEmoji}>✉️</Text>
@@ -688,12 +688,12 @@ export default function SchoolScreen({ route, navigation }) {
       />
       )}
 
-      {/* زر الإضافة */}
-      {(isMainAdmin || userPermissions.edit_items) && activeTab !== 'reports' && (
-        <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
-          <Text style={styles.addBtnText}>إضافة جديد</Text>
-        </TouchableOpacity>
-      )}
+	      {/* زر الإضافة */}
+	      {(isMainAdmin || userPermissions?.edit_items) && activeTab !== 'reports' && (
+	        <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
+	          <Text style={styles.addBtnText}>إضافة جديد</Text>
+	        </TouchableOpacity>
+	      )}
 
       {/* مودال روابط التواصل الاجتماعي */}
       <Modal visible={showSocialModal} transparent animationType="fade">
