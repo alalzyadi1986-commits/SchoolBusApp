@@ -325,7 +325,7 @@ export default function SchoolScreen({ route, navigation }) {
         style: 'destructive',
         onPress: async () => {
           try {
-            // ملاحظة: الحذف يتم عن طريق تعيين قيمة null في Firebase لكل معرف
+            // ملاحظة: الحذف يتم عن طريق تمرير null كـ formData لحذف العقدة
             for (const id of selectedMsgs) {
               await saveSchoolItem(schoolId, 'messages', id, null);
             }
@@ -345,11 +345,11 @@ export default function SchoolScreen({ route, navigation }) {
     try {
       setLoading(true);
       const senderName = user?.name || user?.username || 'مدير المدرسة';
+      const timestamp = new Date().toISOString();
       
       const reply = {
-        id: Date.now().toString(),
         content: replyText,
-        timestamp: new Date().toISOString(),
+        timestamp: timestamp,
         sender: senderName,
         schoolName: dynamicSchoolName,
         schoolId: schoolId,
@@ -358,14 +358,14 @@ export default function SchoolScreen({ route, navigation }) {
       };
 
       // 1. الحفظ في صندوق بريد الإدارة العامة (للسوبر أدمن)
-      await saveSchoolItem(schoolId, 'admin_replies', reply.id, reply);
+      await saveSchoolItem(schoolId, 'admin_replies', null, reply);
       
       // 2. تحديث الرسالة الأصلية في مسار المدرسة لتشمل الرد
       const updatedMsg = {
         ...selectedMessageForReply,
         read: true,
-        replyContent: replyText, // تغيير اسم الحقل لتجنب التعارض مع 'reply' في الـ FlatList
-        replyTimestamp: reply.timestamp,
+        replyContent: replyText,
+        replyTimestamp: timestamp,
         repliedBy: senderName
       };
       await saveSchoolItem(schoolId, 'messages', selectedMessageForReply.id, updatedMsg);
@@ -764,7 +764,22 @@ export default function SchoolScreen({ route, navigation }) {
               data={adminMessages}
               keyExtractor={(item, index) => item.id?.toString() || index.toString()}
               renderItem={({ item }) => (
-                <View style={[styles.chatBubble, item.type === 'broadcast' ? styles.chatBubbleAdmin : styles.chatBubbleSchool, !item.read && item.type === 'broadcast' && styles.chatBubbleUnread]}>
+                <TouchableOpacity 
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (isSelectionMode) {
+                      toggleMsgSelection(item.id);
+                    } else if (item.type === 'broadcast' && !item.read) {
+                      handleMarkAsRead(item);
+                    }
+                  }}
+                  style={[
+                    styles.chatBubble, 
+                    item.type === 'broadcast' ? styles.chatBubbleAdmin : styles.chatBubbleSchool, 
+                    !item.read && item.type === 'broadcast' && styles.chatBubbleUnread,
+                    isSelectionMode && selectedMsgs.includes(item.id) && { borderWidth: 2, borderColor: '#3B82F6' }
+                  ]}
+                >
                   <Text style={styles.chatSender}>{item.sender}</Text>
                   <Text style={styles.chatContent}>{item.content}</Text>
                   <Text style={styles.chatTimestamp}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
@@ -786,7 +801,7 @@ export default function SchoolScreen({ route, navigation }) {
                       <Text style={styles.replyButtonText}>رد</Text>
                     </TouchableOpacity>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
               style={{ maxHeight: 480 }}
               showsVerticalScrollIndicator={false}

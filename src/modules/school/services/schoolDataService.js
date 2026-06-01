@@ -64,10 +64,18 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
 
     // التعامل مع الرسائل والردود
     if (tab === 'messages' || tab === 'admin_replies') {
+      // تصحيح: الردود من المدرسة للسوبر أدمن يجب أن تحفظ في admin_inbox/{schoolId}
+      // والرسائل داخل المدرسة تحفظ في schools/{schoolId}/messages
       const path = tab === 'messages' ? `schools/${schoolId}/messages` : `admin_inbox/${schoolId}`;
-      const dbRef = editingId ? ref(db, `${path}/${editingId}`) : push(ref(db, path));
-      // تصحيح: لا نحفظ dbRef.key كـ id داخلي لأن Firebase يستخدم المفتاح الفعلي
-      await set(dbRef, formData);
+      
+      if (editingId) {
+        // إذا كان هناك معرف، نقوم بالتحديث (مثل تحديث حالة القراءة)
+        await update(ref(db, `${path}/${editingId}`), formData);
+      } else {
+        // إذا لم يكن هناك معرف، نستخدم push لإنشاء رسالة جديدة
+        const newRef = push(ref(db, path));
+        await set(newRef, { ...formData, id: newRef.key });
+      }
       return;
     }
 
