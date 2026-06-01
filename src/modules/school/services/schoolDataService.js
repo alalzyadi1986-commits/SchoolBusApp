@@ -10,7 +10,15 @@ export const subscribeToSchoolData = (schoolId, path, callback) => {
     const data = snap.val();
     const list = data ? Object.keys(data)
       .filter(key => key !== '_init') // تجاهل ملف التهيئة لضمان دقة العد في الباقات
-      .map(key => ({ id: key, ...data[key] })) : [];
+      .map(key => {
+        // تصحيح: الحفاظ على مفتاح Firebase الأصلي (key) وعدم استبداله بـ id الداخلي
+        const item = { ...data[key] };
+        // احذف أي id داخلي لتجنب التضارب مع مفتاح Firebase
+        if (item.id && item.id !== key) {
+          delete item.id;
+        }
+        return { id: key, ...item }; // استخدم مفتاح Firebase كـ id الأساسي
+      }) : [];
     callback(list);
   });
 };
@@ -55,11 +63,11 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
     }
 
     // التعامل مع الرسائل والردود
-    if (tab === 'admin_messages' || tab === 'admin_replies') {
-      const path = tab === 'admin_messages' ? `schools/${schoolId}/admin_messages` : `admin_inbox/${schoolId}`;
+    if (tab === 'messages' || tab === 'admin_replies') {
+      const path = tab === 'messages' ? `schools/${schoolId}/messages` : `admin_inbox/${schoolId}`;
       const dbRef = editingId ? ref(db, `${path}/${editingId}`) : push(ref(db, path));
-      const finalData = editingId ? formData : { ...formData, id: dbRef.key };
-      await set(dbRef, finalData);
+      // تصحيح: لا نحفظ dbRef.key كـ id داخلي لأن Firebase يستخدم المفتاح الفعلي
+      await set(dbRef, formData);
       return;
     }
 

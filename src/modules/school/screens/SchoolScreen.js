@@ -13,15 +13,16 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking'; // استخدام expo-linking بدلاً من react-native/Linking
 
 // استيراد الخدمات والمسارات الجديدة
 import { clearUserSession } from '../../../services/sessionService';
-import { 
-  subscribeToSchoolData, 
-  subscribeToSchoolInfo, 
-  saveSchoolItem, 
-  deleteSchoolItem 
+import {
+  subscribeToSchoolData,
+  subscribeToSchoolInfo,
+  saveSchoolItem,
+  deleteSchoolItem
 } from '../services/schoolDataService';
 import { SchoolDataItem } from '../components/SchoolComponents';
 import { exportToExcel, exportToPDF } from '../services/exportService';
@@ -52,6 +53,7 @@ export default function SchoolScreen({ route, navigation }) {
   const [reports, setReports] = useState([]);
   const [managers, setManagers] = useState([]);
   const [adminMessages, setAdminMessages] = useState([]);
+  const [selectedMessageForReply, setSelectedMessageForReply] = useState(null);
 
   const [formData, setFormData] = useState({});
   const [editingId, setEditingId] = useState(null);
@@ -118,7 +120,7 @@ export default function SchoolScreen({ route, navigation }) {
       subscribeToSchoolData(schoolId, 'reports', setReports),
       subscribeToSchoolData(schoolId, 'managers', setManagers),
       subscribeToSchoolData(schoolId, 'messages', (msgs) => {
-        const sorted = msgs.sort((a, b) => b.id - a.id);
+        const sorted = msgs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)); // فرز الرسائل حسب التاريخ لإنشاء محادثة متسلسلة
         setAdminMessages(sorted);
       })
     ];
@@ -180,11 +182,8 @@ export default function SchoolScreen({ route, navigation }) {
   };
 
   const handleAction = async (action, item = null) => {
-    if (isExpired && action !== 'delete' && action !== 'save_social' && action !== 'mark_read' && action !== 'reply') {
-      Alert.alert('تنبيه', 'انتهى اشتراك المدرسة. يرجى التواصل مع الإدارة العامة للتجديد.', [
-        { text: 'إغلاق' },
-        { text: 'رسائل الإدارة', onPress: () => setShowMsgModal(true) }
-      ]);
+    if (isExpired && action !== 'delete' && action !== 'save_social') {
+      Alert.alert('تنبيه', 'يرجى تجديد الاشتراك للمتابعة');
       return;
     }
 
@@ -303,11 +302,9 @@ export default function SchoolScreen({ route, navigation }) {
   };
 
   const handleMarkAsRead = async (msg) => {
-    const targetMsg = typeof msg === 'object' ? msg : adminMessages.find(m => m.id === msg);
-    if (!targetMsg || targetMsg.read) return;
-    
+    if (msg.read) return;
     try {
-      await saveSchoolItem(schoolId, 'messages', targetMsg.id, { ...targetMsg, read: true });
+      await saveSchoolItem(schoolId, 'messages', msg.id, { ...msg, read: true });
     } catch (e) { console.log('Error marking as read:', e); }
   };
 
@@ -343,8 +340,8 @@ export default function SchoolScreen({ route, navigation }) {
     ]);
   };
 
-  const handleReplyToAdmin = async (msg) => {
-    if (!replyText.trim()) return;
+  const handleReplyToAdmin = async () => {
+    if (!replyText.trim() || !selectedMessageForReply) return;
     try {
       setLoading(true);
       const senderName = user?.name || user?.username || 'مدير المدرسة';
@@ -357,21 +354,25 @@ export default function SchoolScreen({ route, navigation }) {
         schoolName: dynamicSchoolName,
         schoolId: schoolId,
         type: 'reply_to_admin',
-        originalMsgId: msg.id
+        originalMsgId: selectedMessageForReply.id
       };
 
+      // 1. الحفظ في صندوق بريد الإدارة العامة (للسوبر أدمن)
       await saveSchoolItem(schoolId, 'admin_replies', reply.id, reply);
       
+      // 2. تحديث الرسالة الأصلية في مسار المدرسة لتشمل الرد
       const updatedMsg = {
-        ...msg,
+        ...selectedMessageForReply,
         read: true,
-        reply: replyText,
-        replyTime: reply.timestamp
+        replyContent: replyText, // تغيير اسم الحقل لتجنب التعارض مع 'reply' في الـ FlatList
+        replyTimestamp: reply.timestamp,
+        repliedBy: senderName
       };
-      await saveSchoolItem(schoolId, 'messages', msg.id, updatedMsg);
+      await saveSchoolItem(schoolId, 'messages', selectedMessageForReply.id, updatedMsg);
 
       Alert.alert('تم', 'تم إرسال ردك بنجاح');
       setReplyText('');
+      setSelectedMessageForReply(null);
     } catch (e) { 
       console.error('Reply Error:', e);
       Alert.alert('خطأ', 'فشل إرسال الرد'); 
@@ -458,13 +459,13 @@ export default function SchoolScreen({ route, navigation }) {
         <Text style={[styles.cardTitle, { marginBottom: 15 }]}>📥 تصدير البيانات</Text>
         <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%' }}>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#10B981', width: '45%' }]}
+            style={[styles.actionButton, { backgroundColor: '#10B981', width: '45%' }]}}
             onPress={() => exportToExcel(students, "جدول الطلاب", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير الطلاب (Excel)</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#EF4444', width: '45%' }]}
+            style={[styles.actionButton, { backgroundColor: '#EF4444', width: '45%' }]}}
             onPress={() => exportToPDF(students, "جدول الطلاب", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير الطلاب (PDF)</Text>
@@ -473,13 +474,13 @@ export default function SchoolScreen({ route, navigation }) {
         
         <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-around', width: '100%', marginTop: 10 }}>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#3B82F6', width: '45%' }]}
+            style={[styles.actionButton, { backgroundColor: '#3B82F6', width: '45%' }]}}
             onPress={() => exportToExcel(drivers, "جدول السائقين", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير السائقين (Excel)</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#8B5CF6', width: '45%' }]}
+            style={[styles.actionButton, { backgroundColor: '#8B5CF6', width: '45%' }]}}
             onPress={() => exportToPDF(drivers, "جدول السائقين", dynamicSchoolName, user?.displayName || user?.username || 'مدير المدرسة')}
           >
             <Text style={styles.actionButtonText}>تصدير السائقين (PDF)</Text>
@@ -505,8 +506,10 @@ export default function SchoolScreen({ route, navigation }) {
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#3B82F6" /></View>;
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
@@ -515,6 +518,18 @@ export default function SchoolScreen({ route, navigation }) {
             <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
             {!isMainAdmin && <Text style={styles.subTitle}>مرحباً: {user.name}</Text>}
             <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
+          {socialLinks.instagram && (
+            <TouchableOpacity onPress={() => Linking.openURL(socialLinks.instagram)} style={{ marginTop: 5, flexDirection: 'row-reverse', alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, marginRight: 5 }}>📸</Text>
+              <Text style={{ color: '#E1306C', fontSize: 12, fontWeight: 'bold' }}>Instagram</Text>
+            </TouchableOpacity>
+          )}
+          {socialLinks.facebook && (
+            <TouchableOpacity onPress={() => Linking.openURL(socialLinks.facebook)} style={{ marginTop: 5, flexDirection: 'row-reverse', alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, marginRight: 5 }}>📘</Text>
+              <Text style={{ color: '#4267B2', fontSize: 12, fontWeight: 'bold' }}>Facebook</Text>
+            </TouchableOpacity>
+          )}
           </View>
           {schoolLogo ? (
             <Image source={{ uri: schoolLogo }} style={styles.logo} />
@@ -548,7 +563,7 @@ export default function SchoolScreen({ route, navigation }) {
           )}
           {(isMainAdmin || userPermissions.handle_emergencies) && (
             <TouchableOpacity 
-              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
+              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}}
               onPress={() => setActiveTab('emergencies')}
             >
               <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
@@ -606,114 +621,99 @@ export default function SchoolScreen({ route, navigation }) {
 
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
-          {[
-            { id: 'drivers', label: 'السائقين' },
-            { id: 'staff', label: 'المرافقات' },
-            { id: 'parents', label: 'أولياء الأمور' },
-            { id: 'students', label: 'الطلاب' },
-            { id: 'managers', label: 'المدراء' },
-            { id: 'reports', label: 'التقارير' },
-            { id: 'emergencies', label: 'الطوارئ' },
-          ].filter(tab => canViewTab(tab.id)).map(tab => (
-            <TouchableOpacity key={tab.id} style={[styles.tab, activeTab === tab.id && styles.tabActive]} onPress={() => { setActiveTab(tab.id); setShowForm(false); }}>
-              <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
+          {isMainAdmin && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'drivers' && styles.tabActive]} onPress={() => setActiveTab('drivers')}>
+              <Text style={[styles.tabText, activeTab === 'drivers' && styles.tabTextActive]}>السائقين</Text>
             </TouchableOpacity>
-          ))}
+          )}
+          {(isMainAdmin || canViewTab('staff')) && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'staff' && styles.tabActive]} onPress={() => setActiveTab('staff')}>
+              <Text style={[styles.tabText, activeTab === 'staff' && styles.tabTextActive]}>المرافقات</Text>
+            </TouchableOpacity>
+          )}
+          {(isMainAdmin || canViewTab('parents')) && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'parents' && styles.tabActive]} onPress={() => setActiveTab('parents')}>
+              <Text style={[styles.tabText, activeTab === 'parents' && styles.tabTextActive]}>أولياء الأمور</Text>
+            </TouchableOpacity>
+          )}
+          {(isMainAdmin || canViewTab('students')) && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'students' && styles.tabActive]} onPress={() => setActiveTab('students')}>
+              <Text style={[styles.tabText, activeTab === 'students' && styles.tabTextActive]}>الطلاب</Text>
+            </TouchableOpacity>
+          )}
+          {(isMainAdmin || canViewTab('managers')) && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'managers' && styles.tabActive]} onPress={() => setActiveTab('managers')}>
+              <Text style={[styles.tabText, activeTab === 'managers' && styles.tabTextActive]}>المدراء الفرعيين</Text>
+            </TouchableOpacity>
+          )}
+          {(isMainAdmin || canViewTab('emergencies')) && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'emergencies' && styles.tabActive]} onPress={() => setActiveTab('emergencies')}>
+              <Text style={[styles.tabText, activeTab === 'emergencies' && styles.tabTextActive]}>الطوارئ</Text>
+            </TouchableOpacity>
+          )}
+          {(isMainAdmin || canViewTab('reports')) && (
+            <TouchableOpacity style={[styles.tab, activeTab === 'reports' && styles.tabActive]} onPress={() => setActiveTab('reports')}>
+              <Text style={[styles.tabText, activeTab === 'reports' && styles.tabTextActive]}>التقارير</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
 
-      <View style={styles.searchWrapper}>
-        <TextInput style={styles.searchInput} placeholder="بحث بالاسم أو اسم المستخدم..." value={searchQuery} onChangeText={setSearchQuery} />
+      <View style={styles.searchSection}>
+        <TextInput style={styles.searchInput} placeholder="بحث..." value={searchQuery} onChangeText={setSearchQuery} />
       </View>
 
       {activeTab === 'reports' ? renderReports() : (
       <FlatList
         data={currentData}
-        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+        keyExtractor={item => item.id}
         contentContainerStyle={{ padding: 15, paddingBottom: 100 }}
         renderItem={({ item }) => (
           <SchoolDataItem 
             item={item} 
-            tab={activeTab} 
-            permissions={isMainAdmin ? { edit_items: true, delete_items: true } : userPermissions}
-            onEdit={(item) => {
+            activeTab={activeTab} 
+            onEdit={() => {
               setFormData(item);
               setEditingId(item.id);
               setShowForm(true);
             }}
-            onDelete={(item) => handleAction('delete', item)}
+            onDelete={() => handleAction('delete', item)}
+            isMainAdmin={isMainAdmin}
+            userPermissions={userPermissions}
           />
         )}
-        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#64748B' }}>لا توجد بيانات</Text>}
+        ListEmptyComponent={<Text style={styles.emptyText}>لا توجد بيانات لعرضها</Text>}
       />
       )}
 
-      {activeTab !== 'reports' && activeTab !== 'emergencies' && (
+      {/* زر الإضافة */}
+      {(isMainAdmin || userPermissions.edit_items) && activeTab !== 'reports' && (
         <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
-          <Text style={styles.addBtnText}>+ إضافة جديد</Text>
+          <Text style={styles.addBtnText}>إضافة جديد</Text>
         </TouchableOpacity>
       )}
 
-      {/* مودال الإعلانات المدرسية */}
-      <Modal visible={showBroadcastModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>إرسال إعلان للمدرسة 📢</Text>
-            <View style={styles.targetContainer}>
-              {[
-                { id: 'all', label: 'الجميع' },
-                { id: 'parents', label: 'الأهل' },
-                { id: 'drivers', label: 'السائقين' }
-              ].map(t => (
-                <TouchableOpacity 
-                  key={t.id} 
-                  style={[styles.targetBtn, broadcastTarget === t.id && styles.targetBtnActive]}
-                  onPress={() => setBroadcastTarget(t.id)}
-                >
-                  <Text style={[styles.targetText, broadcastTarget === t.id && styles.targetTextActive]}>{t.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput 
-              style={styles.msgInput} 
-              placeholder="اكتب محتوى الإعلان هنا..." 
-              multiline 
-              value={broadcastContent} 
-              onChangeText={setBroadcastContent} 
-            />
-            <View style={styles.modalBtns}>
-              <TouchableOpacity style={[styles.modalBtn, styles.sendBtn]} onPress={handleSendBroadcast}>
-                <Text style={styles.modalBtnText}>إرسال الإعلان</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.closeBtn]} onPress={() => setShowBroadcastModal(false)}>
-                <Text style={styles.modalBtnText}>إلغاء</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* مودال روابط التواصل الاجتماعي */}
-      <Modal visible={showSocialModal} transparent animationType="slide">
+      <Modal visible={showSocialModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>روابط التواصل الاجتماعي 🔗</Text>
+            <Text style={styles.modalTitle}>روابط التواصل الاجتماعي</Text>
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>رابط فيسبوك:</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="https://facebook.com/..." 
-                value={socialLinks.facebook} 
-                onChangeText={(val) => setSocialLinks({...socialLinks, facebook: val})}
+              <TextInput
+                style={styles.input}
+                placeholder="أدخل رابط صفحة الفيسبوك"
+                value={socialLinks.facebook}
+                onChangeText={(text) => setSocialLinks({ ...socialLinks, facebook: text })}
               />
             </View>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>رابط إنستجرام:</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="https://instagram.com/..." 
-                value={socialLinks.instagram} 
-                onChangeText={(val) => setSocialLinks({...socialLinks, instagram: val})}
+              <Text style={styles.inputLabel}>رابط انستجرام:</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="أدخل رابط صفحة الانستجرام"
+                value={socialLinks.instagram}
+                onChangeText={(text) => setSocialLinks({ ...socialLinks, instagram: text })}
               />
             </View>
             <View style={styles.modalBtns}>
@@ -764,70 +764,64 @@ export default function SchoolScreen({ route, navigation }) {
               data={adminMessages}
               keyExtractor={(item, index) => item.id?.toString() || index.toString()}
               renderItem={({ item }) => (
-                <View style={[styles.msgItem, !item.read && { backgroundColor: '#F0F9FF', borderRightWidth: 4, borderRightColor: '#3B82F6' }]}>
-                  <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
-                      {isSelectionMode && (
-                        <TouchableOpacity 
-                          style={[styles.checkbox, { marginLeft: 10, width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' }, selectedMsgs.includes(item.id) && { backgroundColor: '#3B82F6' }]}
-                          onPress={() => toggleMsgSelection(item.id)}
-                        >
-                          {selectedMsgs.includes(item.id) && <Text style={{ color: '#FFF', fontSize: 12 }}>✓</Text>}
-                        </TouchableOpacity>
-                      )}
-                      <Text style={{ fontWeight: 'bold', color: '#1E293B', fontSize: 15 }}>الإدارة العامة 🏛️</Text>
-                    </View>
-                    <Text style={styles.msgDate}>
-                      {new Date(item.timestamp).toLocaleDateString('ar-EG')} - {new Date(item.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    onPress={() => !isSelectionMode && !item.read && handleMarkAsRead(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.msgText, { fontWeight: item.read ? 'normal' : 'bold', textAlign: 'right', color: '#334155', lineHeight: 20 }]}>
-                      {item.content}
-                    </Text>
-                    {!item.read && <Text style={{ fontSize: 10, color: '#3B82F6', fontWeight: 'bold', textAlign: 'left', marginTop: 5 }}>• غير مقروءة</Text>}
-                  </TouchableOpacity>
+                <View style={[styles.chatBubble, item.type === 'broadcast' ? styles.chatBubbleAdmin : styles.chatBubbleSchool, !item.read && item.type === 'broadcast' && styles.chatBubbleUnread]}>
+                  <Text style={styles.chatSender}>{item.sender}</Text>
+                  <Text style={styles.chatContent}>{item.content}</Text>
+                  <Text style={styles.chatTimestamp}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
+                  {item.type === 'broadcast' && !item.read && <Text style={styles.chatUnreadTag}>غير مقروءة</Text>}
 
-                  {/* عرض الرد السابق إن وجد (نظام محادثة) */}
-                  {item.reply && (
-                    <View style={styles.previousReply}>
-                      <Text style={styles.replyLabel}>ردك:</Text>
-                      <Text style={styles.replyTextContent}>{item.reply}</Text>
-                      <Text style={styles.msgTimeSmall}>{new Date(item.replyTime).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</Text>
+                  {item.replyContent && (
+                    <View style={styles.chatReplyContainer}>
+                      <Text style={styles.chatReplyLabel}>ردك:</Text>
+                      <Text style={styles.chatReplyContent}>{item.replyContent}</Text>
+                      <Text style={styles.chatReplyTimestamp}>{new Date(item.replyTimestamp).toLocaleString('ar-EG')}</Text>
                     </View>
                   )}
-                  
-                  {/* قسم الرد على الرسالة */}
-                  {!isSelectionMode && (
-                    <View style={{ marginTop: 15, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 }}>
-                      <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
-                        <TextInput 
-                          style={[styles.input, { flex: 1, height: 38, fontSize: 12, backgroundColor: '#F8FAFC', paddingHorizontal: 10, borderRadius: 8 }]} 
-                          placeholder="اكتب ردك هنا..." 
-                          value={replyText}
-                          onChangeText={setReplyText}
-                        />
-                        <TouchableOpacity 
-                          style={{ backgroundColor: '#3B82F6', padding: 8, borderRadius: 8, marginRight: 8 }}
-                          onPress={() => handleReplyToAdmin(item)}
-                        >
-                          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>إرسال</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+
+                  {!isSelectionMode && item.type === 'broadcast' && !item.replyContent && (
+                    <TouchableOpacity 
+                      style={styles.replyButton}
+                      onPress={() => setSelectedMessageForReply(item)}
+                    >
+                      <Text style={styles.replyButtonText}>رد</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               )}
               style={{ maxHeight: 480 }}
               showsVerticalScrollIndicator={false}
             />
+
+            {selectedMessageForReply && (
+              <View style={styles.replyInputContainer}>
+                <Text style={styles.replyingToText}>الرد على: {selectedMessageForReply.content.substring(0, 30)}...</Text>
+                <TextInput 
+                  style={styles.replyInput} 
+                  placeholder="اكتب ردك هنا..." 
+                  value={replyText}
+                  onChangeText={setReplyText}
+                  multiline
+                />
+                <View style={styles.replyActions}>
+                  <TouchableOpacity 
+                    style={[styles.replyBtn, { backgroundColor: '#3B82F6' }]}}
+                    onPress={handleReplyToAdmin}
+                  >
+                    <Text style={styles.replyBtnText}>إرسال الرد</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.replyBtn, { backgroundColor: '#EF4444' }]}}
+                    onPress={() => setSelectedMessageForReply(null)}
+                  >
+                    <Text style={styles.replyBtnText}>إلغاء</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             <TouchableOpacity 
               style={[styles.closeBtn, { backgroundColor: '#64748B' }]} 
-              onPress={() => { setShowMsgModal(false); setIsSelectionMode(false); setSelectedMsgs([]); }}
+              onPress={() => { setShowMsgModal(false); setIsSelectionMode(false); setSelectedMsgs([]); setSelectedMessageForReply(null); }}
             >
               <Text style={styles.closeBtnText}>إغلاق</Text>
             </TouchableOpacity>
@@ -911,7 +905,7 @@ export default function SchoolScreen({ route, navigation }) {
           </View>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -972,28 +966,24 @@ const styles = StyleSheet.create({
   closeBtn: { backgroundColor: '#94A3B8', marginTop: 15, padding: 12, borderRadius: 10, alignItems: 'center' },
   closeBtnText: { color: '#FFF', fontWeight: 'bold' },
   modalBtnText: { color: '#FFF', fontWeight: 'bold' },
-  msgItem: { marginBottom: 15, padding: 15, borderRadius: 15, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  msgDate: { fontSize: 10, color: '#94A3B8', textAlign: 'right' },
-  msgText: { fontSize: 14, color: '#1E293B', textAlign: 'right', marginTop: 5 },
-  previousReply: { backgroundColor: '#F0F9FF', padding: 8, borderRadius: 8, marginTop: 10, borderRightWidth: 3, borderRightColor: '#3B82F6' },
-  replyLabel: { fontSize: 10, fontWeight: 'bold', color: '#3B82F6', marginBottom: 2, textAlign: 'right' },
-  replyTextContent: { fontSize: 12, color: '#1E293B', textAlign: 'right' },
-  msgTimeSmall: { fontSize: 9, color: '#94A3B8', marginTop: 4, textAlign: 'left' },
-  inputWrapper: { marginBottom: 15 },
-  inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginBottom: 5, textAlign: 'right' },
-  input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, textAlign: 'right' },
-  pickerItem: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginLeft: 8, marginBottom: 5 },
-  pickerItemActive: { backgroundColor: '#3B82F6' },
-  pickerText: { fontSize: 12, color: '#64748B' },
-  pickerTextActive: { color: '#FFF', fontWeight: 'bold' },
-  permsSection: { marginTop: 20, padding: 15, backgroundColor: '#F8FAFC', borderRadius: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
-  permsTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 15, textAlign: 'right' },
-  reportRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', width: '100%', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  reportLabel: { fontSize: 14, color: '#475569' },
-  reportValue: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
-  permRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  permLabel: { fontSize: 14, color: '#475569' },
-  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  checkMark: { color: '#FFF', fontWeight: 'bold', fontSize: 14 }
+  // أنماط جديدة لواجهة المحادثة
+  chatBubble: { padding: 10, borderRadius: 10, marginBottom: 8, maxWidth: '80%' },
+  chatBubbleAdmin: { backgroundColor: '#E2E8F0', alignSelf: 'flex-start', borderTopLeftRadius: 0 },
+  chatBubbleSchool: { backgroundColor: '#DBEAFE', alignSelf: 'flex-end', borderTopRightRadius: 0 },
+  chatBubbleUnread: { borderWidth: 2, borderColor: '#EF4444' },
+  chatSender: { fontWeight: 'bold', fontSize: 12, marginBottom: 2, color: '#475569' },
+  chatContent: { fontSize: 14, color: '#1E293B' },
+  chatTimestamp: { fontSize: 10, color: '#64748B', marginTop: 5, textAlign: 'left' },
+  chatUnreadTag: { fontSize: 10, color: '#EF4444', fontWeight: 'bold', textAlign: 'left', marginTop: 2 },
+  chatReplyContainer: { marginTop: 10, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#CBD5E1' },
+  chatReplyLabel: { fontSize: 10, fontWeight: 'bold', color: '#3B82F6', marginBottom: 2 },
+  chatReplyContent: { fontSize: 12, color: '#475569' },
+  chatReplyTimestamp: { fontSize: 9, color: '#64748B', marginTop: 2, textAlign: 'left' },
+  replyButton: { backgroundColor: '#3B82F6', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5, marginTop: 5, alignSelf: 'flex-end' },
+  replyButtonText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  replyInputContainer: { marginTop: 10, padding: 10, backgroundColor: '#F1F5F9', borderRadius: 10 },
+  replyingToText: { fontSize: 12, color: '#64748B', marginBottom: 5, textAlign: 'right' },
+  replyInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 8, fontSize: 12, textAlign: 'right', minHeight: 40 },
+  replyActions: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 },
+  replyBtn: { flex: 1, padding: 8, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
 });
