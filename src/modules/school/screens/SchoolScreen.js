@@ -531,10 +531,13 @@ export default function SchoolScreen({ route, navigation }) {
             <Text style={styles.imgWelcomeText}>مرحباً، الأستاذ {user?.name?.split(' ')[0] || 'أحمد'}</Text>
             <Text style={styles.imgSchoolName}>{dynamicSchoolName || 'الدرة النموذجية'}</Text>
           </View>
-          <Image 
-            source={schoolLogo ? { uri: schoolLogo } : require('../../../assets/default_avatar.png')} 
-            style={styles.imgAvatar} 
-          />
+          {schoolLogo ? (
+            <Image source={{ uri: schoolLogo }} style={styles.imgAvatar} />
+          ) : (
+            <View style={[styles.imgAvatar, { backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }]}>
+              <Text style={{ fontSize: 24 }}>👨‍🏫</Text>
+            </View>
+          )}
         </View>
       </View>
 
