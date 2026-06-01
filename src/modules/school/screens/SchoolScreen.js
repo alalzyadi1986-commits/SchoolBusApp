@@ -60,6 +60,9 @@ export default function SchoolScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [dynamicSchoolName, setDynamicSchoolName] = useState('');
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [communicationTab, setCommunicationTab] = useState('announcements'); // 'announcements', 'messages', 'complaints'
   
   // ميزة عرض رسائل الإدارة
   const [showMsgModal, setShowMsgModal] = useState(false);
@@ -513,66 +516,60 @@ export default function SchoolScreen({ route, navigation }) {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}><Text style={styles.logoutText}>خروج</Text></TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
-            <Text style={styles.title}>{dynamicSchoolName || 'لوحة الإدارة'}</Text>
-            {!isMainAdmin && <Text style={styles.subTitle}>مرحباً: {user.name}</Text>}
-            <Text style={styles.expiryText}>الاشتراك ينتهي في: {expiryDate.split('T')[0]}</Text>
-          {socialLinks.instagram && (
-            <TouchableOpacity onPress={() => Linking.openURL(socialLinks.instagram)} style={{ marginTop: 5, flexDirection: 'row-reverse', alignItems: 'center' }}>
-              <Text style={{ fontSize: 16, marginRight: 5 }}>📸</Text>
-              <Text style={{ color: '#E1306C', fontSize: 12, fontWeight: 'bold' }}>Instagram</Text>
-            </TouchableOpacity>
-          )}
-          {socialLinks.facebook && (
-            <TouchableOpacity onPress={() => Linking.openURL(socialLinks.facebook)} style={{ marginTop: 5, flexDirection: 'row-reverse', alignItems: 'center' }}>
-              <Text style={{ fontSize: 16, marginRight: 5 }}>📘</Text>
-              <Text style={{ color: '#4267B2', fontSize: 12, fontWeight: 'bold' }}>Facebook</Text>
-            </TouchableOpacity>
-          )}
+      <View style={styles.newHeader}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMsgModal(true)}>
+            <Text style={{ fontSize: 22 }}>🔔</Text>
+            {adminMessages.filter(m => !m.read).length > 0 && <View style={styles.smallBadge} />}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowProfileModal(true)}>
+            <Text style={{ fontSize: 22 }}>👤</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.headerRight}>
+          <View style={{ alignItems: 'flex-end', marginRight: 12 }}>
+            <Text style={styles.welcomeText}>مرحباً، الأستاذ</Text>
+            <Text style={styles.adminName}>{user?.name || 'المدير'}</Text>
           </View>
           {schoolLogo ? (
-            <Image source={{ uri: schoolLogo }} style={styles.logo} />
+            <Image source={{ uri: schoolLogo }} style={styles.newLogo} />
           ) : (
-            <View style={styles.logoPlaceholder}><Text style={{ fontSize: 20 }}>🏫</Text></View>
+            <View style={styles.newLogoPlaceholder}><Text style={{ fontSize: 24 }}>🏫</Text></View>
           )}
         </View>
       </View>
 
-      {/* لوحة الإحصائيات الذكية - تظهر للجميع ولكن ببيانات حسب الصلاحية */}
-      <View style={{ marginTop: 10 }}>
-        <Text style={[styles.inputLabel, { marginRight: 15, marginBottom: 5, fontSize: 16, color: '#1E293B' }]}>📊 الإحصائية العامة</Text>
-        <View style={styles.statsContainer}>
+      {/* لوحة المؤشرات السريعة (Dashboard Stats) */}
+      <View style={styles.dashboardStats}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, flexDirection: 'row-reverse' }}>
+          {(isMainAdmin || userPermissions?.handle_emergencies) && (
+            <TouchableOpacity 
+              style={[styles.newStatCard, { backgroundColor: '#FEF2F2', borderRightColor: '#EF4444' }]}
+              onPress={() => setActiveTab('emergencies')}
+            >
+              <Text style={[styles.newStatValue, { color: '#EF4444' }]}>{stats.emergencies}</Text>
+              <Text style={styles.newStatLabel}>الطوارئ</Text>
+            </TouchableOpacity>
+          )}
+          {(isMainAdmin || (isSubManager && userPermissions?.view_active_trips)) && (
+            <View style={[styles.newStatCard, { backgroundColor: '#FFFBEB', borderRightColor: '#F59E0B' }]}>
+              <Text style={[styles.newStatValue, { color: '#F59E0B' }]}>{stats.activeTrips}</Text>
+              <Text style={styles.newStatLabel}>الرحلات النشطة</Text>
+            </View>
+          )}
+          {(isMainAdmin || userPermissions?.manage_students) && (
+            <View style={[styles.newStatCard, { backgroundColor: '#F0FDF4', borderRightColor: '#10B981' }]}>
+              <Text style={[styles.newStatValue, { color: '#10B981' }]}>{stats.students}</Text>
+              <Text style={styles.newStatLabel}>الطلاب</Text>
+            </View>
+          )}
           {(isMainAdmin || (isSubManager && userPermissions?.view_buses)) && (
-	            <View style={[styles.statCard, { borderRightColor: '#3B82F6' }]}>
-	              <Text style={styles.statValue}>{stats.buses}</Text>
-	              <Text style={styles.statLabel}>باصات</Text>
-	            </View>
-	          )}
-	          {(isMainAdmin || userPermissions?.manage_students) && (
-	            <View style={[styles.statCard, { borderRightColor: '#10B981' }]}>
-	              <Text style={styles.statValue}>{stats.students}</Text>
-	              <Text style={styles.statLabel}>طلاب</Text>
-	            </View>
-	          )}
-	          {(isMainAdmin || (isSubManager && userPermissions?.view_active_trips)) && (
-	            <View style={[styles.statCard, { borderRightColor: '#F59E0B' }]}>
-	              <Text style={styles.statValue}>{stats.activeTrips}</Text>
-	              <Text style={styles.statLabel}>رحلات نشطة</Text>
-	            </View>
-	          )}
-	          {(isMainAdmin || userPermissions?.handle_emergencies) && (
-	            <TouchableOpacity 
-	              style={[styles.statCard, { borderRightColor: '#EF4444', backgroundColor: stats.emergencies > 0 ? '#FEF2F2' : '#FFF' }]}
-	              onPress={() => setActiveTab('emergencies')}
-	            >
-	              <Text style={[styles.statValue, stats.emergencies > 0 && { color: '#EF4444' }]}>{stats.emergencies}</Text>
-	              <Text style={styles.statLabel}>طوارئ</Text>
-	            </TouchableOpacity>
-	          )}
-        </View>
+            <View style={[styles.newStatCard, { backgroundColor: '#EFF6FF', borderRightColor: '#3B82F6' }]}>
+              <Text style={[styles.newStatValue, { color: '#3B82F6' }]}>{stats.buses}</Text>
+              <Text style={styles.newStatLabel}>الباصات</Text>
+            </View>
+          )}
+        </ScrollView>
       </View>
 
 	      <View style={styles.quickActionsGrid}>
@@ -585,40 +582,39 @@ export default function SchoolScreen({ route, navigation }) {
 	            <Text style={styles.actionLabel}>مراقبة حية</Text>
 	          </TouchableOpacity>
 	
-	          <TouchableOpacity 
-	            style={styles.actionBox} 
-	            onPress={() => (isMainAdmin || userPermissions?.send_broadcasts) ? setShowBroadcastModal(true) : null}
-	          >
-	            <Text style={styles.actionEmoji}>📢</Text>
-	            <Text style={styles.actionLabel}>إعلان عام</Text>
-	          </TouchableOpacity>
-	
-	          <TouchableOpacity 
-	            style={styles.actionBox} 
-	            onPress={() => (isMainAdmin || userPermissions?.manage_staff || userPermissions?.manage_students) ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
-	          >
-	            <Text style={styles.actionEmoji}>📍</Text>
-	            <Text style={styles.actionLabel}>موقع المدرسة</Text>
-	          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionBox} onPress={() => setShowMsgModal(true)}>
-            <Text style={styles.actionEmoji}>✉️</Text>
-            <Text style={styles.actionLabel}>رسائل الإدارة</Text>
+          <TouchableOpacity 
+            style={styles.actionBox} 
+            onPress={() => setShowMsgModal(true)}
+          >
+            <Text style={styles.actionEmoji}>📬</Text>
+            <Text style={styles.actionLabel}>مركز التواصل</Text>
             {adminMessages.filter(m => !m.read).length > 0 && (
               <View style={styles.badge}><Text style={styles.badgeText}>{adminMessages.filter(m => !m.read).length}</Text></View>
             )}
           </TouchableOpacity>
-        </View>
 
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionBox} onPress={() => (isMainAdmin || isSubManager) ? setShowSocialModal(true) : null}>
-            <Text style={styles.actionEmoji}>🔗</Text>
-            <Text style={styles.actionLabel}>روابط التواصل</Text>
+          <TouchableOpacity 
+            style={styles.actionBox} 
+            onPress={() => (isMainAdmin || userPermissions?.manage_staff || userPermissions?.manage_students) ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
+          >
+            <Text style={styles.actionEmoji}>📍</Text>
+            <Text style={styles.actionLabel}>موقع المدرسة</Text>
           </TouchableOpacity>
-          <View style={styles.emptyBox} />
-          <View style={styles.emptyBox} />
-          <View style={styles.emptyBox} />
+
+          <TouchableOpacity style={styles.actionBox} onPress={() => setShowExportModal(true)}>
+            <Text style={styles.actionEmoji}>📥</Text>
+            <Text style={styles.actionLabel}>تصدير التقارير</Text>
+          </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.searchWrapper}>
+        <TextInput 
+          style={styles.searchInput} 
+          placeholder="🔍 ابحث عن اسم، رقم باص، أو مستخدم..." 
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
 
       <View style={styles.tabsWrapper}>
@@ -661,9 +657,7 @@ export default function SchoolScreen({ route, navigation }) {
         </ScrollView>
       </View>
 
-      <View style={styles.searchSection}>
-        <TextInput style={styles.searchInput} placeholder="بحث..." value={searchQuery} onChangeText={setSearchQuery} />
-      </View>
+
 
       {activeTab === 'reports' ? renderReports() : (
       <FlatList
@@ -742,44 +736,104 @@ export default function SchoolScreen({ route, navigation }) {
 	        </View>
 	      </Modal>
 
-	      {/* مودال روابط التواصل الاجتماعي */}
-	      <Modal visible={showSocialModal} transparent animationType="fade">
+      {/* مودال تصدير التقارير الموحد */}
+      <Modal visible={showExportModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>📥 تصدير التقارير</Text>
+            <Text style={{ textAlign: 'center', color: '#64748B', marginBottom: 20 }}>اختر نوع التقرير والصيغة المطلوبة</Text>
+            
+            <View style={styles.exportSection}>
+              <Text style={styles.exportLabel}>📊 تقارير الطلاب:</Text>
+              <View style={styles.exportRow}>
+                <TouchableOpacity style={[styles.exportBtn, { backgroundColor: '#10B981' }]} onPress={() => exportToExcel(students, 'طلاب المدرسة')}>
+                  <Text style={styles.exportBtnText}>Excel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.exportBtn, { backgroundColor: '#EF4444' }]} onPress={() => exportToPDF(students, 'طلاب المدرسة')}>
+                  <Text style={styles.exportBtnText}>PDF</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.exportSection}>
+              <Text style={styles.exportLabel}>🚐 تقارير السائقين:</Text>
+              <View style={styles.exportRow}>
+                <TouchableOpacity style={[styles.exportBtn, { backgroundColor: '#10B981' }]} onPress={() => exportToExcel(drivers, 'سائقي المدرسة')}>
+                  <Text style={styles.exportBtnText}>Excel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.exportBtn, { backgroundColor: '#EF4444' }]} onPress={() => exportToPDF(drivers, 'سائقي المدرسة')}>
+                  <Text style={styles.exportBtnText}>PDF</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity style={[styles.closeBtn, { marginTop: 20 }]} onPress={() => setShowExportModal(false)}>
+              <Text style={styles.closeBtnText}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* مودال الملف الشخصي والإعدادات */}
+      <Modal visible={showProfileModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              {schoolLogo ? (
+                <Image source={{ uri: schoolLogo }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+              ) : (
+                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 40 }}>🏫</Text></View>
+              )}
+              <Text style={[styles.adminName, { marginTop: 10, fontSize: 20 }]}>{user?.name}</Text>
+              <Text style={{ color: '#64748B' }}>{dynamicSchoolName}</Text>
+            </View>
+
+            <View style={styles.profileItem}>
+              <Text style={styles.profileLabel}>تاريخ انتهاء الاشتراك:</Text>
+              <Text style={[styles.profileValue, { color: isExpired ? '#EF4444' : '#10B981' }]}>{expiryDate.split('T')[0]}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.profileBtn} onPress={() => { setShowProfileModal(false); setShowSocialModal(true); }}>
+              <Text style={styles.profileBtnText}>🔗 إعدادات التواصل الاجتماعي</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.profileBtn, { backgroundColor: '#FEE2E2' }]} onPress={handleLogout}>
+              <Text style={[styles.profileBtnText, { color: '#EF4444' }]}>🚪 تسجيل الخروج</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setShowProfileModal(false)}>
+              <Text style={styles.closeBtnText}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* مودال روابط التواصل الاجتماعي */}
+      <Modal visible={showSocialModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>روابط التواصل الاجتماعي</Text>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>رابط فيسبوك:</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="أدخل رابط صفحة الفيسبوك"
+            <View style={{ marginBottom: 15 }}>
+              <Text style={styles.inputLabel}>رابط Facebook:</Text>
+              <TextInput 
+                style={[styles.searchInput, { textAlign: 'left' }]} 
+                placeholder="https://facebook.com/..." 
                 value={socialLinks.facebook}
-                onChangeText={(text) => setSocialLinks({ ...socialLinks, facebook: text })}
+                onChangeText={(t) => setSocialLinks({ ...socialLinks, facebook: t })}
               />
             </View>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>رابط انستجرام:</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="أدخل رابط صفحة الانستجرام"
+            <View style={{ marginBottom: 20 }}>
+              <Text style={styles.inputLabel}>رابط Instagram:</Text>
+              <TextInput 
+                style={[styles.searchInput, { textAlign: 'left' }]} 
+                placeholder="https://instagram.com/..." 
                 value={socialLinks.instagram}
-                onChangeText={(text) => setSocialLinks({ ...socialLinks, instagram: text })}
+                onChangeText={(t) => setSocialLinks({ ...socialLinks, instagram: t })}
               />
             </View>
             <View style={styles.modalBtns}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, styles.sendBtn, { backgroundColor: '#10B981' }]} 
-                onPress={async () => {
-                  try {
-                    // تصحيح: حفظ الروابط مباشرة في مسار محدد لمنع أخطاء المعرفات
-                    await saveSchoolItem(schoolId, 'info', 'socialLinks', socialLinks);
-                    Alert.alert('تم', 'تم حفظ الروابط بنجاح');
-                    setShowSocialModal(false);
-                  } catch (e) {
-                    Alert.alert('خطأ', 'فشل حفظ الروابط');
-                  }
-                }}
-              >
-                <Text style={styles.modalBtnText}>حفظ الروابط</Text>
+              <TouchableOpacity style={[styles.modalBtn, styles.sendBtn]} onPress={() => handleAction('save_social')}>
+                <Text style={styles.modalBtnText}>حفظ</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.closeBtn, { marginTop: 0 }]} onPress={() => setShowSocialModal(false)}>
                 <Text style={styles.modalBtnText}>إلغاء</Text>
@@ -789,105 +843,91 @@ export default function SchoolScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* مودال عرض الرسائل الإدارية (تواصل الإدارة) */}
-      <Modal visible={showMsgModal} transparent animationType="fade">
+      {/* مركز التواصل الموحد */}
+      <Modal visible={showMsgModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingHorizontal: 10 }]}>
-            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingHorizontal: 10 }}>
-              <Text style={[styles.modalTitle, { marginBottom: 0 }]}>تواصل الإدارة 📩</Text>
-              <TouchableOpacity onPress={() => { setIsSelectionMode(!isSelectionMode); setSelectedMsgs([]); }}>
-                <Text style={{ color: '#3B82F6', fontWeight: 'bold' }}>{isSelectionMode ? 'إلغاء' : 'تحديد'}</Text>
+          <View style={[styles.modalContent, { height: '80%', paddingHorizontal: 0 }]}>
+            <Text style={styles.modalTitle}>📬 مركز التواصل</Text>
+            
+            <View style={styles.commTabs}>
+              <TouchableOpacity 
+                style={[styles.commTab, communicationTab === 'announcements' && styles.commTabActive]} 
+                onPress={() => setCommunicationTab('announcements')}
+              >
+                <Text style={[styles.commTabText, communicationTab === 'announcements' && styles.commTabTextActive]}>إعلان عام</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.commTab, communicationTab === 'messages' && styles.commTabActive]} 
+                onPress={() => setCommunicationTab('messages')}
+              >
+                <Text style={[styles.commTabText, communicationTab === 'messages' && styles.commTabTextActive]}>رسائل الإدارة</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.commTab, communicationTab === 'complaints' && styles.commTabActive]} 
+                onPress={() => setCommunicationTab('complaints')}
+              >
+                <Text style={[styles.commTabText, communicationTab === 'complaints' && styles.commTabTextActive]}>الشكاوى</Text>
               </TouchableOpacity>
             </View>
 
-            {isSelectionMode && selectedMsgs.length > 0 && (
-              <TouchableOpacity 
-                style={{ backgroundColor: '#EF4444', padding: 8, borderRadius: 10, marginBottom: 10, alignItems: 'center' }}
-                onPress={handleDeleteSelected}
-              >
-                <Text style={{ color: '#FFF', fontWeight: 'bold' }}>حذف المختار ({selectedMsgs.length}) 🗑️</Text>
-              </TouchableOpacity>
-            )}
-
-            <FlatList
-              data={adminMessages}
-              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (isSelectionMode) {
-                      toggleMsgSelection(item.id);
-                    } else if (item.type === 'broadcast' && !item.read) {
-                      handleMarkAsRead(item);
-                    }
-                  }}
-                  style={[
-                    styles.chatBubble, 
-                    item.type === 'broadcast' ? styles.chatBubbleAdmin : styles.chatBubbleSchool, 
-                    !item.read && item.type === 'broadcast' && styles.chatBubbleUnread,
-                    isSelectionMode && selectedMsgs.includes(item.id) && { borderWidth: 2, borderColor: '#3B82F6' }
-                  ]}
-                >
-                  <Text style={styles.chatSender}>{item.sender}</Text>
-                  <Text style={styles.chatContent}>{item.content}</Text>
-                  <Text style={styles.chatTimestamp}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
-                  {item.type === 'broadcast' && !item.read && <Text style={styles.chatUnreadTag}>غير مقروءة</Text>}
-
-                  {item.replyContent && (
-                    <View style={styles.chatReplyContainer}>
-                      <Text style={styles.chatReplyLabel}>ردك:</Text>
-                      <Text style={styles.chatReplyContent}>{item.replyContent}</Text>
-                      <Text style={styles.chatReplyTimestamp}>{new Date(item.replyTimestamp).toLocaleString('ar-EG')}</Text>
-                    </View>
-                  )}
-
-                  {!isSelectionMode && item.type === 'broadcast' && !item.replyContent && (
-                    <TouchableOpacity 
-                      style={styles.replyButton}
-                      onPress={() => setSelectedMessageForReply(item)}
-                    >
-                      <Text style={styles.replyButtonText}>رد</Text>
+            <View style={{ flex: 1, padding: 15 }}>
+              {communicationTab === 'announcements' && (
+                <View>
+                  <Text style={styles.inputLabel}>📢 إرسال إعلان للمدرسة</Text>
+                  <View style={styles.targetContainer}>
+                    <TouchableOpacity style={[styles.targetBtn, broadcastTarget === 'all' && styles.targetBtnActive]} onPress={() => setBroadcastTarget('all')}>
+                      <Text style={[styles.targetText, broadcastTarget === 'all' && styles.targetTextActive]}>الكل</Text>
                     </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
-              )}
-              style={{ maxHeight: 480 }}
-              showsVerticalScrollIndicator={false}
-            />
-
-            {selectedMessageForReply && (
-              <View style={styles.replyInputContainer}>
-                <Text style={styles.replyingToText}>الرد على: {selectedMessageForReply.content.substring(0, 30)}...</Text>
-                <TextInput 
-                  style={styles.replyInput} 
-                  placeholder="اكتب ردك هنا..." 
-                  value={replyText}
-                  onChangeText={setReplyText}
-                  multiline
-                />
-                <View style={styles.replyActions}>
-                  <TouchableOpacity 
-                    style={[styles.replyBtn, { backgroundColor: '#3B82F6' }]}
-                    onPress={handleReplyToAdmin}
-                  >
-                    <Text style={styles.replyBtnText}>إرسال الرد</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.replyBtn, { backgroundColor: '#EF4444' }]}
-                    onPress={() => setSelectedMessageForReply(null)}
-                  >
-                    <Text style={styles.replyBtnText}>إلغاء</Text>
+                    <TouchableOpacity style={[styles.targetBtn, broadcastTarget === 'parents' && styles.targetBtnActive]} onPress={() => setBroadcastTarget('parents')}>
+                      <Text style={[styles.targetText, broadcastTarget === 'parents' && styles.targetTextActive]}>أولياء الأمور</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.targetBtn, broadcastTarget === 'drivers' && styles.targetBtnActive]} onPress={() => setBroadcastTarget('drivers')}>
+                      <Text style={[styles.targetText, broadcastTarget === 'drivers' && styles.targetTextActive]}>السائقين</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.msgInput}
+                    placeholder="اكتب محتوى الإعلان هنا..."
+                    value={broadcastContent}
+                    onChangeText={setBroadcastContent}
+                    multiline
+                  />
+                  <TouchableOpacity style={[styles.modalBtn, styles.sendBtn, { marginTop: 15 }]} onPress={handleSendBroadcast}>
+                    <Text style={styles.modalBtnText}>إرسال الإعلان الآن</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            )}
+              )}
 
-            <TouchableOpacity 
-              style={[styles.closeBtn, { backgroundColor: '#64748B' }]} 
-              onPress={() => { setShowMsgModal(false); setIsSelectionMode(false); setSelectedMsgs([]); setSelectedMessageForReply(null); }}
-            >
-              <Text style={styles.closeBtnText}>إغلاق</Text>
+              {communicationTab === 'messages' && (
+                <FlatList
+                  data={adminMessages}
+                  keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      activeOpacity={0.8}
+                      onPress={() => item.type === 'broadcast' && !item.read && handleMarkAsRead(item)}
+                      style={[styles.chatBubble, item.type === 'broadcast' ? styles.chatBubbleAdmin : styles.chatBubbleSchool, !item.read && item.type === 'broadcast' && styles.chatBubbleUnread]}
+                    >
+                      <Text style={styles.chatSender}>{item.sender}</Text>
+                      <Text style={styles.chatContent}>{item.content}</Text>
+                      <Text style={styles.chatTimestamp}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
+                      {!item.replyContent && item.type === 'broadcast' && (
+                        <TouchableOpacity style={styles.replyButton} onPress={() => setSelectedMessageForReply(item)}>
+                          <Text style={styles.replyButtonText}>رد</Text>
+                        </TouchableOpacity>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+
+              {communicationTab === 'complaints' && (
+                <View style={styles.centered}><Text style={{ color: '#64748B' }}>لا توجد شكاوى حالياً</Text></View>
+              )}
+            </View>
+
+            <TouchableOpacity style={[styles.closeBtn, { marginHorizontal: 20, marginBottom: 20 }]} onPress={() => setShowMsgModal(false)}>
+              <Text style={styles.closeBtnText}>إغلاق المركز</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -976,35 +1016,48 @@ export default function SchoolScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
-  subTitle: { fontSize: 12, color: '#3B82F6', fontWeight: 'bold' },
-  expiryText: { fontSize: 11, color: '#EF4444', marginTop: 2 },
-  logo: { width: 50, height: 50, borderRadius: 25, resizeMode: 'contain', backgroundColor: '#F1F5F9' },
-  logoPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-  logoutBtn: { padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
-  logoutText: { color: '#EF4444', fontWeight: 'bold' },
-  statsContainer: { flexDirection: 'row-reverse', padding: 15, justifyContent: 'space-between' },
-  statCard: { flex: 1, backgroundColor: '#FFF', padding: 12, borderRadius: 16, marginHorizontal: 5, alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderRightWidth: 5 },
-  statValue: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
-  statLabel: { fontSize: 11, color: '#64748B', marginTop: 4, fontWeight: '600' },
-  quickActionsGrid: { paddingHorizontal: 15, marginTop: 15 },
+  newHeader: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  headerLeft: { flexDirection: 'row' },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  iconBtn: { padding: 10, backgroundColor: '#F1F5F9', borderRadius: 12, marginLeft: 10, position: 'relative' },
+  smallBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFF' },
+  welcomeText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  adminName: { fontSize: 16, color: '#1E293B', fontWeight: 'bold' },
+  newLogo: { width: 45, height: 45, borderRadius: 12, backgroundColor: '#F1F5F9' },
+  newLogoPlaceholder: { width: 45, height: 45, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  dashboardStats: { marginTop: 15 },
+  newStatCard: { width: 110, padding: 12, borderRadius: 16, marginHorizontal: 6, borderRightWidth: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  newStatValue: { fontSize: 18, fontWeight: 'bold' },
+  newStatLabel: { fontSize: 10, fontWeight: 'bold', marginTop: 4 },
+  quickActionsGrid: { paddingHorizontal: 15, marginTop: 20 },
   actionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 12 },
-  actionBox: { width: '23%', aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, position: 'relative', borderWidth: 1, borderColor: '#F1F5F9' },
-  emptyBox: { width: '23%', aspectRatio: 1 },
-  actionEmoji: { fontSize: 24, marginBottom: 6 },
-  actionLabel: { fontSize: 10, fontWeight: 'bold', color: '#475569', textAlign: 'center' },
-  badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#FFF' },
-  badgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
-  tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
-  tab: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 25, marginRight: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-  tabActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6', elevation: 4, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
-  tabText: { fontSize: 14, color: '#64748B', fontWeight: 'bold' },
-  tabTextActive: { color: '#FFF' },
+  actionBox: { width: '31%', aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 20, justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, borderWidth: 1, borderColor: '#F1F5F9' },
+  actionEmoji: { fontSize: 26, marginBottom: 8 },
+  actionLabel: { fontSize: 10, fontWeight: 'bold', color: '#475569' },
+  commTabs: { flexDirection: 'row-reverse', backgroundColor: '#F1F5F9', borderRadius: 15, margin: 15, padding: 5 },
+  commTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
+  commTabActive: { backgroundColor: '#FFF', elevation: 2 },
+  commTabText: { fontSize: 12, color: '#64748B', fontWeight: 'bold' },
+  commTabTextActive: { color: '#3B82F6' },
+  exportSection: { marginBottom: 20 },
+  exportLabel: { fontSize: 14, fontWeight: 'bold', color: '#1E293B', marginBottom: 10, textAlign: 'right' },
+  exportRow: { flexDirection: 'row-reverse', justifyContent: 'space-between' },
+  exportBtn: { flex: 0.48, padding: 12, borderRadius: 12, alignItems: 'center' },
+  exportBtnText: { color: '#FFF', fontWeight: 'bold' },
+  profileItem: { flexDirection: 'row-reverse', justifyContent: 'space-between', padding: 15, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 10 },
+  profileLabel: { color: '#64748B', fontWeight: '600' },
+  profileValue: { fontWeight: 'bold' },
+  profileBtn: { padding: 15, backgroundColor: '#F1F5F9', borderRadius: 12, marginBottom: 10, alignItems: 'center' },
+  profileBtnText: { fontWeight: 'bold', color: '#475569' },
   searchWrapper: { padding: 15 },
-  searchInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, textAlign: 'right' },
-  card: { backgroundColor: '#FFF', padding: 15, borderRadius: 15, marginBottom: 10, flexDirection: 'row', alignItems: 'center', elevation: 2 },
+  searchInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F1F5F9', borderRadius: 15, padding: 15, textAlign: 'right', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  tabsWrapper: { backgroundColor: '#F8FAFC' },
+  tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
+  tab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 15, marginRight: 10, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F1F5F9' },
+  tabActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  tabText: { fontSize: 13, color: '#64748B', fontWeight: 'bold' },
+  tabTextActive: { color: '#FFF' },
+  card: { backgroundColor: '#FFF', padding: 15, borderRadius: 20, marginBottom: 12, flexDirection: 'row', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
   cardSub: { fontSize: 13, color: '#64748B' },
   permsSummary: { fontSize: 11, color: '#3B82F6', marginTop: 2, fontWeight: 'bold' },
