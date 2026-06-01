@@ -516,97 +516,144 @@ export default function SchoolScreen({ route, navigation }) {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.newHeader}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMsgModal(true)}>
-            <Text style={{ fontSize: 22 }}>🔔</Text>
-            {adminMessages.filter(m => !m.read).length > 0 && <View style={styles.smallBadge} />}
+      <View style={styles.imgHeader}>
+        <View style={styles.imgHeaderLeft}>
+          <TouchableOpacity style={styles.imgIconBtn} onPress={() => setShowMsgModal(true)}>
+            <Text style={{ fontSize: 24 }}>🔔</Text>
+            {adminMessages.filter(m => !m.read).length > 0 && <View style={styles.imgBadge} />}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowProfileModal(true)}>
-            <Text style={{ fontSize: 22 }}>👤</Text>
+          <TouchableOpacity style={styles.imgIconBtn} onPress={() => setShowProfileModal(true)}>
+            <Text style={{ fontSize: 24 }}>⚙️</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.headerRight}>
-          <View style={{ alignItems: 'flex-end', marginRight: 12 }}>
-            <Text style={styles.welcomeText}>مرحباً، الأستاذ</Text>
-            <Text style={styles.adminName}>{user?.name || 'المدير'}</Text>
+        <View style={styles.imgHeaderRight}>
+          <View style={{ alignItems: 'flex-end', marginRight: 15 }}>
+            <Text style={styles.imgWelcomeText}>مرحباً، الأستاذ {user?.name?.split(' ')[0] || 'أحمد'}</Text>
+            <Text style={styles.imgSchoolName}>{dynamicSchoolName || 'الدرة النموذجية'}</Text>
           </View>
-          {schoolLogo ? (
-            <Image source={{ uri: schoolLogo }} style={styles.newLogo} />
-          ) : (
-            <View style={styles.newLogoPlaceholder}><Text style={{ fontSize: 24 }}>🏫</Text></View>
-          )}
+          <Image 
+            source={schoolLogo ? { uri: schoolLogo } : require('../../../assets/default_avatar.png')} 
+            style={styles.imgAvatar} 
+          />
         </View>
       </View>
 
-      {/* لوحة المؤشرات السريعة (Dashboard Stats) */}
-      <View style={styles.dashboardStats}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15, flexDirection: 'row-reverse' }}>
-          {(isMainAdmin || userPermissions?.handle_emergencies) && (
-            <TouchableOpacity 
-              style={[styles.newStatCard, { backgroundColor: '#FEF2F2', borderRightColor: '#EF4444' }]}
-              onPress={() => setActiveTab('emergencies')}
-            >
-              <Text style={[styles.newStatValue, { color: '#EF4444' }]}>{stats.emergencies}</Text>
-              <Text style={styles.newStatLabel}>الطوارئ</Text>
-            </TouchableOpacity>
-          )}
-          {(isMainAdmin || (isSubManager && userPermissions?.view_active_trips)) && (
-            <View style={[styles.newStatCard, { backgroundColor: '#FFFBEB', borderRightColor: '#F59E0B' }]}>
-              <Text style={[styles.newStatValue, { color: '#F59E0B' }]}>{stats.activeTrips}</Text>
-              <Text style={styles.newStatLabel}>الرحلات النشطة</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>الإحصائاء العامة</Text>
+        </View>
+
+        <View style={styles.imgStatsRow}>
+          {(isMainAdmin || (isSubManager && userPermissions?.view_buses)) && (
+            <View style={[styles.imgStatCard, { borderRightColor: '#3B82F6' }]}>
+              <Text style={{ fontSize: 28, marginBottom: 5 }}>🚌</Text>
+              <Text style={styles.imgStatValue}>{stats.buses}</Text>
+              <Text style={styles.imgStatLabel}>باصات</Text>
             </View>
           )}
           {(isMainAdmin || userPermissions?.manage_students) && (
-            <View style={[styles.newStatCard, { backgroundColor: '#F0FDF4', borderRightColor: '#10B981' }]}>
-              <Text style={[styles.newStatValue, { color: '#10B981' }]}>{stats.students}</Text>
-              <Text style={styles.newStatLabel}>الطلاب</Text>
+            <View style={[styles.imgStatCard, { borderRightColor: '#10B981' }]}>
+              <Text style={{ fontSize: 28, marginBottom: 5 }}>🎓</Text>
+              <Text style={styles.imgStatValue}>{stats.students}</Text>
+              <Text style={styles.imgStatLabel}>طلاب</Text>
             </View>
           )}
-          {(isMainAdmin || (isSubManager && userPermissions?.view_buses)) && (
-            <View style={[styles.newStatCard, { backgroundColor: '#EFF6FF', borderRightColor: '#3B82F6' }]}>
-              <Text style={[styles.newStatValue, { color: '#3B82F6' }]}>{stats.buses}</Text>
-              <Text style={styles.newStatLabel}>الباصات</Text>
+          {(isMainAdmin || (isSubManager && userPermissions?.view_active_trips)) && (
+            <View style={[styles.imgStatCard, { borderRightColor: '#F59E0B' }]}>
+              <Text style={{ fontSize: 28, marginBottom: 5 }}>📍</Text>
+              <Text style={styles.imgStatValue}>{stats.activeTrips}</Text>
+              <Text style={styles.imgStatLabel}>رحلات</Text>
             </View>
           )}
-        </ScrollView>
-      </View>
-
-	      <View style={styles.quickActionsGrid}>
-	        <View style={styles.actionRow}>
-	          <TouchableOpacity 
-	            style={styles.actionBox} 
-	            onPress={() => (isMainAdmin || userPermissions?.view_active_trips) ? navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName }) : null}
-	          >
-	            <Text style={styles.actionEmoji}>📡</Text>
-	            <Text style={styles.actionLabel}>مراقبة حية</Text>
-	          </TouchableOpacity>
-	
-          <TouchableOpacity 
-            style={styles.actionBox} 
-            onPress={() => setShowMsgModal(true)}
-          >
-            <Text style={styles.actionEmoji}>📬</Text>
-            <Text style={styles.actionLabel}>مركز التواصل</Text>
-            {adminMessages.filter(m => !m.read).length > 0 && (
-              <View style={styles.badge}><Text style={styles.badgeText}>{adminMessages.filter(m => !m.read).length}</Text></View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionBox} 
-            onPress={() => (isMainAdmin || userPermissions?.manage_staff || userPermissions?.manage_students) ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
-          >
-            <Text style={styles.actionEmoji}>📍</Text>
-            <Text style={styles.actionLabel}>موقع المدرسة</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionBox} onPress={() => setShowExportModal(true)}>
-            <Text style={styles.actionEmoji}>📥</Text>
-            <Text style={styles.actionLabel}>تصدير التقارير</Text>
-          </TouchableOpacity>
+          {(isMainAdmin || userPermissions?.handle_emergencies) && (
+            <TouchableOpacity 
+              style={[styles.imgStatCard, { borderRightColor: '#EF4444' }]}
+              onPress={() => setActiveTab('emergencies')}
+            >
+              <View style={styles.emergencyIcon}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>!</Text></View>
+              <Text style={styles.imgStatValue}>{stats.emergencies}</Text>
+              <Text style={styles.imgStatLabel}>طوارئ</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      </View>
+
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>الأختلال السريعة</Text>
+        </View>
+
+        <View style={styles.imgActionsGrid}>
+          <View style={styles.imgActionRow}>
+            <TouchableOpacity style={styles.imgActionBox} onPress={() => navigation.navigate('ActiveTrips', { schoolId })}>
+              <Text style={{ fontSize: 26, marginBottom: 8 }}>🏠</Text>
+              <Text style={styles.imgActionLabel}>مراقبة حية</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.imgActionBox} onPress={() => setShowMsgModal(true)}>
+              <Text style={{ fontSize: 26, marginBottom: 8 }}>✉️</Text>
+              <Text style={styles.imgActionLabel}>رسائل الإدارة</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.imgActionBox} onPress={() => setShowBroadcastModal(true)}>
+              <Text style={{ fontSize: 26, marginBottom: 8 }}>📢</Text>
+              <Text style={styles.imgActionLabel}>إعلان عام</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.imgActionBox} onPress={() => setShowMsgModal(true)}>
+              <Text style={{ fontSize: 26, marginBottom: 8 }}>📷</Text>
+              <Text style={styles.imgActionLabel}>رسائل الإدارة</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.imgActionRow}>
+            <View style={{ width: '23.5%' }} />
+            <View style={{ width: '23.5%' }} />
+            <View style={{ width: '23.5%' }} />
+            <TouchableOpacity style={[styles.imgActionBox, { width: '23.5%' }]} onPress={() => navigation.navigate('SetSchoolLocation', { schoolId })}>
+              <Text style={{ fontSize: 26, marginBottom: 8 }}>🏫</Text>
+              <Text style={styles.imgActionLabel}>موقع المدرسة والروابط</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.imgSearchWrapper}>
+          <View style={styles.imgSearchContainer}>
+            <Text style={{ fontSize: 18, color: '#94A3B8', marginLeft: 10 }}>🔍</Text>
+            <TextInput 
+              style={styles.imgSearchInput} 
+              placeholder="بحث شامل (أولياء الأمور، السائقين، المرافقات)..." 
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+        </View>
+
+        <View style={styles.imgAccountsSection}>
+          <Text style={styles.imgAccountsTitle}>إدارة القوائم والحسابات</Text>
+          <View style={styles.imgAccountsRow}>
+            <TouchableOpacity 
+              style={[styles.imgAccountCard, { borderColor: '#3B82F6' }, activeTab === 'parents' && styles.imgAccountCardActive]} 
+              onPress={() => setActiveTab('parents')}
+            >
+              <Text style={{ fontSize: 40, marginBottom: 10 }}>👨‍👩‍👧‍👦</Text>
+              <Text style={styles.imgAccountLabel}>أولياء الأمور</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.imgAccountCard, { borderColor: '#10B981' }, activeTab === 'drivers' && styles.imgAccountCardActive]} 
+              onPress={() => setActiveTab('drivers')}
+            >
+              <Text style={{ fontSize: 40, marginBottom: 10 }}>🚐</Text>
+              <Text style={styles.imgAccountLabel}>السائقين</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.imgAccountCard, { borderColor: '#F59E0B' }, activeTab === 'staff' && styles.imgAccountCardActive]} 
+              onPress={() => setActiveTab('staff')}
+            >
+              <Text style={{ fontSize: 40, marginBottom: 10 }}>❤️</Text>
+              <Text style={styles.imgAccountLabel}>المرافقات</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.imgExportBtn} onPress={() => setShowExportModal(true)}>
+          <Text style={styles.imgExportBtnText}>Export Reports 📥</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       <View style={styles.searchWrapper}>
         <TextInput 
@@ -1016,48 +1063,36 @@ export default function SchoolScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  newHeader: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  headerLeft: { flexDirection: 'row' },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  iconBtn: { padding: 10, backgroundColor: '#F1F5F9', borderRadius: 12, marginLeft: 10, position: 'relative' },
-  smallBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFF' },
-  welcomeText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
-  adminName: { fontSize: 16, color: '#1E293B', fontWeight: 'bold' },
-  newLogo: { width: 45, height: 45, borderRadius: 12, backgroundColor: '#F1F5F9' },
-  newLogoPlaceholder: { width: 45, height: 45, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-  dashboardStats: { marginTop: 15 },
-  newStatCard: { width: 110, padding: 12, borderRadius: 16, marginHorizontal: 6, borderRightWidth: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-  newStatValue: { fontSize: 18, fontWeight: 'bold' },
-  newStatLabel: { fontSize: 10, fontWeight: 'bold', marginTop: 4 },
-  quickActionsGrid: { paddingHorizontal: 15, marginTop: 20 },
-  actionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 12 },
-  actionBox: { width: '31%', aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 20, justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, borderWidth: 1, borderColor: '#F1F5F9' },
-  actionEmoji: { fontSize: 26, marginBottom: 8 },
-  actionLabel: { fontSize: 10, fontWeight: 'bold', color: '#475569' },
-  commTabs: { flexDirection: 'row-reverse', backgroundColor: '#F1F5F9', borderRadius: 15, margin: 15, padding: 5 },
-  commTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
-  commTabActive: { backgroundColor: '#FFF', elevation: 2 },
-  commTabText: { fontSize: 12, color: '#64748B', fontWeight: 'bold' },
-  commTabTextActive: { color: '#3B82F6' },
-  exportSection: { marginBottom: 20 },
-  exportLabel: { fontSize: 14, fontWeight: 'bold', color: '#1E293B', marginBottom: 10, textAlign: 'right' },
-  exportRow: { flexDirection: 'row-reverse', justifyContent: 'space-between' },
-  exportBtn: { flex: 0.48, padding: 12, borderRadius: 12, alignItems: 'center' },
-  exportBtnText: { color: '#FFF', fontWeight: 'bold' },
-  profileItem: { flexDirection: 'row-reverse', justifyContent: 'space-between', padding: 15, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 10 },
-  profileLabel: { color: '#64748B', fontWeight: '600' },
-  profileValue: { fontWeight: 'bold' },
-  profileBtn: { padding: 15, backgroundColor: '#F1F5F9', borderRadius: 12, marginBottom: 10, alignItems: 'center' },
-  profileBtnText: { fontWeight: 'bold', color: '#475569' },
-  searchWrapper: { padding: 15 },
-  searchInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F1F5F9', borderRadius: 15, padding: 15, textAlign: 'right', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-  tabsWrapper: { backgroundColor: '#F8FAFC' },
-  tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
-  tab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 15, marginRight: 10, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F1F5F9' },
-  tabActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  tabText: { fontSize: 13, color: '#64748B', fontWeight: 'bold' },
-  tabTextActive: { color: '#FFF' },
-  card: { backgroundColor: '#FFF', padding: 15, borderRadius: 20, marginBottom: 12, flexDirection: 'row', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  imgHeader: { padding: 20, backgroundColor: '#FFF', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  imgHeaderLeft: { flexDirection: 'row' },
+  imgHeaderRight: { flexDirection: 'row', alignItems: 'center' },
+  imgIconBtn: { padding: 10, backgroundColor: '#F8FAFC', borderRadius: 15, marginLeft: 10, borderWidth: 1, borderColor: '#F1F5F9' },
+  imgBadge: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+  imgWelcomeText: { fontSize: 16, color: '#1E293B', fontWeight: 'bold' },
+  imgSchoolName: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+  imgAvatar: { width: 55, height: 55, borderRadius: 27.5, borderWidth: 2, borderColor: '#F1F5F9' },
+  sectionTitleRow: { paddingHorizontal: 20, marginTop: 20, marginBottom: 10 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'right' },
+  imgStatsRow: { flexDirection: 'row-reverse', paddingHorizontal: 15, justifyContent: 'space-between' },
+  imgStatCard: { width: '23.5%', backgroundColor: '#FFF', padding: 15, borderRadius: 15, alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, borderRightWidth: 4 },
+  imgStatValue: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
+  imgStatLabel: { fontSize: 12, color: '#64748B', marginTop: 5, fontWeight: 'bold' },
+  emergencyIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
+  imgActionsGrid: { paddingHorizontal: 15, marginTop: 10 },
+  imgActionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 12 },
+  imgActionBox: { width: '23.5%', aspectRatio: 0.9, backgroundColor: '#FFF', borderRadius: 15, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, borderWidth: 1, borderColor: '#F1F5F9' },
+  imgActionLabel: { fontSize: 9, fontWeight: 'bold', color: '#475569', textAlign: 'center', paddingHorizontal: 2 },
+  imgSearchWrapper: { paddingHorizontal: 15, marginTop: 20 },
+  imgSearchContainer: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 15, paddingHorizontal: 15, borderWidth: 1, borderColor: '#E2E8F0', height: 55 },
+  imgSearchInput: { flex: 1, textAlign: 'right', fontSize: 14, color: '#1E293B' },
+  imgAccountsSection: { paddingHorizontal: 15, marginTop: 25 },
+  imgAccountsTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', textAlign: 'right', marginBottom: 15 },
+  imgAccountsRow: { flexDirection: 'row-reverse', justifyContent: 'space-between' },
+  imgAccountCard: { width: '31%', backgroundColor: '#FFF', padding: 20, borderRadius: 20, alignItems: 'center', borderWidth: 2, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
+  imgAccountCardActive: { backgroundColor: '#F8FAFC', scale: 1.05 },
+  imgAccountLabel: { fontSize: 13, fontWeight: 'bold', color: '#1E293B' },
+  imgExportBtn: { margin: 15, backgroundColor: '#F1F5F9', padding: 18, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  imgExportBtnText: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
   cardSub: { fontSize: 13, color: '#64748B' },
   permsSummary: { fontSize: 11, color: '#3B82F6', marginTop: 2, fontWeight: 'bold' },
