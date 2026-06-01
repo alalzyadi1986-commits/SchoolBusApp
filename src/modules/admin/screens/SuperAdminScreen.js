@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db, storage } from '../../../firebaseConfig';
+import { db, storage } from '../../../../firebaseConfig';
 import {
   ref,
   set,

@@ -22,8 +22,8 @@ import { useNavigation } from '@react-navigation/native';
  * المسارات الأصلية المضمونة من كودك
  */
 import { loginUser } from '../services/authService';
-import { saveUserSession, getUserSession } from '../../../services/sessionService';
-import { registerForPushNotificationsAsync } from '../../../utils/notifications';
+import { saveUserSession, getUserSession } from '../../../../services/sessionService';
+import { registerForPushNotificationsAsync } from '../../../../utils/notifications';
 
 const { height, width } = Dimensions.get('window');
 

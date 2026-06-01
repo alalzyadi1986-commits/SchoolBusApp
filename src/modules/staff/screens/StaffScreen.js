@@ -13,7 +13,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // استيراد الخدمات والمسارات الجديدة
-import { clearUserSession } from '../../../services/sessionService';
+import { clearUserSession } from '../../../../services/sessionService';
 import { 
   subscribeToStaffStudents, 
   updateStudentAttendance, 
