@@ -317,7 +317,7 @@ export const ReportLostItemForm = ({
 
       {/* زر الإبلاغ */}
       <TouchableOpacity
-        style={[styles.submitButton, loading && styles.submitButtonDisabled, { backgroundColor: '#EF4444' }]}} // لون أحمر للإبلاغ عن مفقود
+        style={[styles.submitButton, loading && styles.submitButtonDisabled, { backgroundColor: '#EF4444' }]} // لون أحمر للإبلاغ عن مفقود
         onPress={onSubmit}
         disabled={loading}
       >
