@@ -180,8 +180,22 @@ export default function SchoolScreen({ route, navigation }) {
   };
 
   const handleAction = async (action, item = null) => {
-    if (isExpired && action !== 'delete') {
+    if (isExpired && action !== 'delete' && action !== 'save_social') {
       Alert.alert('تنبيه', 'يرجى تجديد الاشتراك للمتابعة');
+      return;
+    }
+
+    if (action === 'save_social') {
+      try {
+        setLoading(true);
+        await saveSchoolItem(schoolId, 'info', 'socialLinks', socialLinks);
+        setShowSocialModal(false);
+        Alert.alert('نجاح', 'تم حفظ روابط التواصل بنجاح');
+      } catch (e) {
+        Alert.alert('خطأ', 'فشل حفظ الروابط');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -285,9 +299,10 @@ export default function SchoolScreen({ route, navigation }) {
     }
   };
 
-  const handleMarkAsRead = async (msgId) => {
+  const handleMarkAsRead = async (msg) => {
+    if (msg.read) return;
     try {
-      await saveSchoolItem(schoolId, 'messages', msgId, { read: true });
+      await saveSchoolItem(schoolId, 'messages', msg.id, { ...msg, read: true });
     } catch (e) { console.log('Error marking as read:', e); }
   };
 
@@ -326,18 +341,25 @@ export default function SchoolScreen({ route, navigation }) {
   const handleReplyToAdmin = async (msg) => {
     if (!replyText.trim()) return;
     try {
+      setLoading(true);
       const reply = {
         id: Date.now().toString(),
         content: replyText,
         timestamp: new Date().toISOString(),
         sender: user?.name || 'مدير المدرسة',
+        schoolName: dynamicSchoolName,
         type: 'reply_to_admin',
         originalMsgId: msg.id
       };
+      // الحفظ في صندوق بريد الإدارة العامة
       await saveSchoolItem(schoolId, 'admin_replies', reply.id, reply);
       Alert.alert('تم', 'تم إرسال ردك للإدارة بنجاح');
       setReplyText('');
-    } catch (e) { Alert.alert('خطأ', 'فشل إرسال الرد'); }
+    } catch (e) { 
+      Alert.alert('خطأ', 'فشل إرسال الرد'); 
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -519,62 +541,48 @@ export default function SchoolScreen({ route, navigation }) {
       </View>
 
       <View style={styles.quickActionsGrid}>
-        {/* الصف الأول */}
         <View style={styles.actionRow}>
-          {(isMainAdmin || (isSubManager && userPermissions.view_active_trips)) ? (
-            <TouchableOpacity 
-              style={[styles.gridButton, { backgroundColor: '#1E293B' }]} 
-              onPress={() => navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName })}
-            >
-              <Text style={styles.gridButtonText}>📡 مراقبة حية</Text>
-            </TouchableOpacity>
-          ) : <View style={styles.gridButtonPlaceholder} />}
+          <TouchableOpacity 
+            style={styles.actionBox} 
+            onPress={() => (isMainAdmin || userPermissions.view_active_trips) ? navigation.navigate('ActiveTrips', { schoolId, schoolName: dynamicSchoolName }) : null}
+          >
+            <Text style={styles.actionEmoji}>📡</Text>
+            <Text style={styles.actionLabel}>مراقبة حية</Text>
+          </TouchableOpacity>
 
-          {(isMainAdmin || (isSubManager && userPermissions.send_broadcasts)) ? (
-            <TouchableOpacity style={[styles.gridButton, { backgroundColor: '#10B981' }]} onPress={() => setShowBroadcastModal(true)}>
-              <Text style={styles.gridButtonText}>إعلان عام 📢</Text>
-            </TouchableOpacity>
-          ) : <View style={styles.gridButtonPlaceholder} />}
+          <TouchableOpacity 
+            style={styles.actionBox} 
+            onPress={() => (isMainAdmin || userPermissions.send_broadcasts) ? setShowBroadcastModal(true) : null}
+          >
+            <Text style={styles.actionEmoji}>📢</Text>
+            <Text style={styles.actionLabel}>إعلان عام</Text>
+          </TouchableOpacity>
 
-          {isMainAdmin ? (
-            <TouchableOpacity 
-              style={[styles.gridButton, { backgroundColor: '#8B5CF6' }]} 
-              onPress={() => {
-                navigation.navigate('SetSchoolLocation', { 
-                  schoolId, 
-                  currentInfo: { location: currentLocation } 
-                });
-              }}
-            >
-              <Text style={styles.gridButtonText}>📍 موقع المدرسة</Text>
-            </TouchableOpacity>
-          ) : <View style={styles.gridButtonPlaceholder} />}
+          <TouchableOpacity 
+            style={styles.actionBox} 
+            onPress={() => isMainAdmin ? navigation.navigate('SetSchoolLocation', { schoolId, currentInfo: { location: currentLocation } }) : null}
+          >
+            <Text style={styles.actionEmoji}>📍</Text>
+            <Text style={styles.actionLabel}>موقع المدرسة</Text>
+          </TouchableOpacity>
 
-          {(isMainAdmin || (isSubManager && userPermissions.view_admin_messages)) ? (
-            <TouchableOpacity 
-              style={[styles.gridButton, { backgroundColor: '#3B82F6' }]} 
-              onPress={() => setShowMsgModal(true)}
-            >
-              <Text style={styles.gridButtonText}>رسائل الإدارة ({adminMessages.filter(m => !m.read).length}) ✉️</Text>
-              {adminMessages.some(m => !m.read) && <View style={styles.unreadBadge} />}
-            </TouchableOpacity>
-          ) : <View style={styles.gridButtonPlaceholder} />}
+          <TouchableOpacity style={styles.actionBox} onPress={() => setShowMsgModal(true)}>
+            <Text style={styles.actionEmoji}>✉️</Text>
+            <Text style={styles.actionLabel}>رسائل الإدارة</Text>
+            {adminMessages.filter(m => !m.read).length > 0 && (
+              <View style={styles.badge}><Text style={styles.badgeText}>{adminMessages.filter(m => !m.read).length}</Text></View>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* الصف الثاني */}
         <View style={styles.actionRow}>
-          {isMainAdmin ? (
-            <TouchableOpacity 
-              style={[styles.gridButton, { backgroundColor: '#4F46E5' }]} 
-              onPress={() => setShowSocialModal(true)}
-            >
-              <Text style={styles.gridButtonText}>🔗 روابط التواصل</Text>
-            </TouchableOpacity>
-          ) : <View style={styles.gridButtonPlaceholder} />}
-          
-          <View style={styles.gridButtonPlaceholder} />
-          <View style={styles.gridButtonPlaceholder} />
-          <View style={styles.gridButtonPlaceholder} />
+          <TouchableOpacity style={styles.actionBox} onPress={() => isMainAdmin ? setShowSocialModal(true) : null}>
+            <Text style={styles.actionEmoji}>🔗</Text>
+            <Text style={styles.actionLabel}>روابط التواصل</Text>
+          </TouchableOpacity>
+          <View style={styles.emptyBox} />
+          <View style={styles.emptyBox} />
+          <View style={styles.emptyBox} />
         </View>
       </View>
 
@@ -894,12 +902,14 @@ const styles = StyleSheet.create({
   statCard: { flex: 1, backgroundColor: '#FFF', padding: 10, borderRadius: 12, marginHorizontal: 4, alignItems: 'center', elevation: 2, borderRightWidth: 4 },
   statValue: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
   statLabel: { fontSize: 10, color: '#64748B', marginTop: 2 },
-  quickActionsGrid: { paddingHorizontal: 10, marginBottom: 15 },
+  quickActionsGrid: { paddingHorizontal: 15, marginTop: 10 },
   actionRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 10 },
-  gridButton: { width: '23%', height: 75, borderRadius: 10, padding: 5, justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  gridButtonPlaceholder: { width: '23%', height: 75 },
-  gridButtonText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
-  unreadBadge: { position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' },
+  actionBox: { width: '23.5%', aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 12, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, position: 'relative', borderWidth: 1, borderColor: '#F1F5F9' },
+  emptyBox: { width: '23.5%', aspectRatio: 1 },
+  actionEmoji: { fontSize: 22, marginBottom: 4 },
+  actionLabel: { fontSize: 9, fontWeight: 'bold', color: '#475569', textAlign: 'center' },
+  badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#FFF' },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
   tabsWrapper: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   tabsContainer: { paddingHorizontal: 10, paddingVertical: 10 },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginRight: 8, backgroundColor: '#F1F5F9' },

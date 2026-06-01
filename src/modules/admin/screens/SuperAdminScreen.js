@@ -105,6 +105,8 @@ export default function SuperAdminScreen({ navigation }) {
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
   const [showMsgModal, setShowMsgModal] = useState(false);
+  const [showInboxModal, setShowInboxModal] = useState(false);
+  const [inboxMessages, setInboxMessages] = useState([]);
 
   // إحصائيات التقارير
   const [reportsData, setReportsData] = useState({
@@ -135,7 +137,25 @@ export default function SuperAdminScreen({ navigation }) {
         setFilteredSchools([]);
       }
     });
-    return () => unsubscribe();
+
+    const inboxRef = ref(db, 'admin_inbox');
+    const unsubscribeInbox = onValue(inboxRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        let allMsgs = [];
+        Object.keys(data).forEach(schoolId => {
+          const schoolMsgs = data[schoolId];
+          Object.keys(schoolMsgs).forEach(msgId => {
+            allMsgs.push({ ...schoolMsgs[msgId], id: msgId, schoolId });
+          });
+        });
+        setInboxMessages(allMsgs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+      } else {
+        setInboxMessages([]);
+      }
+    });
+
+    return () => { unsubscribe(); unsubscribeInbox(); };
   }, []);
 
   useEffect(() => {
@@ -425,6 +445,13 @@ export default function SuperAdminScreen({ navigation }) {
           <View style={[styles.iconCircle, { backgroundColor: '#64748B' }]}><Text style={styles.iconText}>🔐</Text></View>
           <Text style={styles.actionBtnLabel}>كلمة السر</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.mainActionBtn} onPress={() => setShowInboxModal(true)}>
+          <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
+            <Text style={styles.iconText}>📥</Text>
+            {inboxMessages.length > 0 && <View style={styles.unreadBadge} />}
+          </View>
+          <Text style={styles.actionBtnLabel}>الرسائل الواردة</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchSection}>
@@ -560,6 +587,53 @@ export default function SuperAdminScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showInboxModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <Text style={styles.modalTitle}>الرسائل الواردة 📥</Text>
+            <FlatList
+              data={inboxMessages}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.inboxItem}>
+                  <View style={styles.inboxHeader}>
+                    <Text style={styles.inboxSchoolName}>{schools.find(s => s.id === item.schoolId)?.displayName || 'مدرسة غير معروفة'}</Text>
+                    <Text style={styles.inboxTime}>{new Date(item.timestamp).toLocaleString('ar-EG')}</Text>
+                  </View>
+                  <Text style={styles.inboxSender}>من: {item.sender}</Text>
+                  <Text style={styles.inboxContent}>{item.content}</Text>
+                  <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 }}>
+                    <TouchableOpacity 
+                      style={styles.replyBtn} 
+                      onPress={() => {
+                        setMsgTarget({ id: item.schoolId, displayName: schools.find(s => s.id === item.schoolId)?.displayName });
+                        setShowInboxModal(false);
+                        setShowMsgModal(true);
+                      }}
+                    >
+                      <Text style={styles.replyBtnText}>رد ↩️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={async () => {
+                        try {
+                          await remove(ref(db, `admin_inbox/${item.schoolId}/${item.id}`));
+                        } catch (e) { Alert.alert('خطأ', 'فشل الحذف'); }
+                      }}
+                    >
+                      <Text style={{ fontSize: 18 }}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={<Text style={styles.emptyText}>لا توجد رسائل واردة حالياً</Text>}
+            />
+            <TouchableOpacity style={[styles.modalBtn, styles.closeBtn, { marginTop: 15 }]} onPress={() => setShowInboxModal(false)}>
+              <Text style={styles.modalBtnText}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -598,6 +672,15 @@ const styles = StyleSheet.create({
   uploadedLogo: { width: 80, height: 80, borderRadius: 40 },
   uploadPlaceholder: { alignItems: 'center' },
   uploadText: { fontSize: 10, color: '#64748B', marginTop: 5 },
+  unreadBadge: { position: 'absolute', top: 0, right: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFF' },
+  inboxItem: { backgroundColor: '#F8FAFC', padding: 15, borderRadius: 15, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  inboxHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 5 },
+  inboxSchoolName: { fontWeight: 'bold', color: '#1E293B', fontSize: 14 },
+  inboxTime: { fontSize: 10, color: '#64748B' },
+  inboxSender: { fontSize: 12, color: '#3B82F6', marginBottom: 5, textAlign: 'right' },
+  inboxContent: { fontSize: 13, color: '#475569', textAlign: 'right', lineHeight: 20 },
+  replyBtn: { backgroundColor: '#3B82F6', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 8 },
+  replyBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   input: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 12, marginBottom: 10, textAlign: 'right', fontSize: 13 },
   label: { fontSize: 13, fontWeight: 'bold', marginBottom: 8, textAlign: 'right', color: '#475569' },
   planContainer: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 15 },

@@ -48,7 +48,18 @@ export const saveSchoolItem = async (schoolId, tab, editingId, formData) => {
 
     // التعامل مع الحالات الخاصة (روابط التواصل أو معلومات المدرسة)
     if (tab === 'info' && editingId) {
-      await update(ref(db, `schools/${schoolId}/${editingId}`), formData);
+      const dbRef = ref(db, `schools/${schoolId}/${editingId}`);
+      // استخدام set بدلاً من update لضمان الكتابة الكاملة وتجنب مشاكل المفاتيح غير المعرفة في الروابط الاجتماعية
+      await set(dbRef, formData);
+      return;
+    }
+
+    // التعامل مع الرسائل والردود
+    if (tab === 'admin_messages' || tab === 'admin_replies') {
+      const path = tab === 'admin_messages' ? `schools/${schoolId}/admin_messages` : `admin_inbox/${schoolId}`;
+      const dbRef = editingId ? ref(db, `${path}/${editingId}`) : push(ref(db, path));
+      const finalData = editingId ? formData : { ...formData, id: dbRef.key };
+      await set(dbRef, finalData);
       return;
     }
 
