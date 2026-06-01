@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -18,7 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 
-// استيراد الخدمات والمسارات
 import { clearUserSession } from '../../../services/sessionService';
 import {
   subscribeToSchoolData,
@@ -34,7 +33,6 @@ const { width } = Dimensions.get('window');
 export default function SchoolScreen({ route, navigation }) {
   const { schoolId, user } = route.params || {};
   
-  // تحديد دور المستخدم والصلاحيات
   const isMainAdmin = user?.role === 'schoolAdmin';
   const isSubManager = user?.role === 'subManager';
   const userPermissions = useMemo(() => user?.permissions || {}, [user]);
@@ -45,8 +43,8 @@ export default function SchoolScreen({ route, navigation }) {
   const [isExpired, setIsExpired] = useState(false);
   const [schoolLimits, setSchoolLimits] = useState({ maxBuses: 3, maxStudents: 50 });
   const [schoolLogo, setSchoolLogo] = useState('');
+  const [dynamicSchoolName, setDynamicSchoolName] = useState('');
   const [socialLinks, setSocialLinks] = useState({ facebook: '', instagram: '' });
-  const [showSocialModal, setShowSocialModal] = useState(false);
 
   const [drivers, setDrivers] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -61,11 +59,11 @@ export default function SchoolScreen({ route, navigation }) {
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [dynamicSchoolName, setDynamicSchoolName] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showSocialModal, setShowSocialModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastTarget, setBroadcastTarget] = useState('all');
   const [broadcastContent, setBroadcastContent] = useState('');
-  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
 
   useEffect(() => {
     if (!schoolId || !user) {
@@ -121,12 +119,12 @@ export default function SchoolScreen({ route, navigation }) {
 
   const handleAction = async (action, item = null) => {
     if (isExpired && action !== 'delete') {
-      Alert.alert('تنبيه', 'يرجى تجديد الاشتراك للمتابعة');
+      Alert.alert('تنبيه', 'يرجى تجديد الاشتراك');
       return;
     }
 
     if (action === 'delete' && item) {
-      Alert.alert('حذف', 'هل أنت متأكد من حذف هذا العنصر؟', [
+      Alert.alert('حذف', 'هل أنت متأكد؟', [
         { text: 'إلغاء', style: 'cancel' },
         { text: 'حذف', style: 'destructive', onPress: async () => {
           try {
@@ -136,7 +134,7 @@ export default function SchoolScreen({ route, navigation }) {
       ]);
     } else if (action === 'save') {
       if (!formData.username || !formData.name) {
-        Alert.alert('خطأ', 'يرجى تعبئة الحقول الأساسية');
+        Alert.alert('خطأ', 'يرجى تعبئة الحقول المطلوبة');
         return;
       }
       try {
@@ -145,9 +143,31 @@ export default function SchoolScreen({ route, navigation }) {
         setFormData({});
         setEditingId(null);
       } catch (error) {
-        Alert.alert('خطأ', 'حدث خطأ أثناء الحفظ');
+        Alert.alert('خطأ', 'حدث خطأ');
       }
     }
+  };
+
+  const handleExport = (format) => {
+    const dataToExport = {
+      drivers, staff, parents, students, emergencies, reports
+    }[activeTab] || drivers;
+    
+    const typeLabel = {
+      drivers: 'السائقين',
+      staff: 'المرافقات',
+      parents: 'أولياء الأمور',
+      students: 'الطلاب',
+      emergencies: 'الطوارئ',
+      reports: 'التقارير'
+    }[activeTab] || 'بيانات';
+
+    if (format === 'excel') {
+      exportToExcel(dataToExport, typeLabel, dynamicSchoolName, user.name);
+    } else {
+      exportToPDF(dataToExport, typeLabel, dynamicSchoolName, user.name);
+    }
+    setShowExportModal(false);
   };
 
   const handleSendBroadcast = async () => {
@@ -172,7 +192,7 @@ export default function SchoolScreen({ route, navigation }) {
     try {
       await saveSchoolItem(schoolId, 'info', 'socialLinks', socialLinks);
       setShowSocialModal(false);
-      Alert.alert('نجاح', 'تم حفظ روابط التواصل');
+      Alert.alert('نجاح', 'تم حفظ الروابط');
     } catch (e) { Alert.alert('خطأ', 'فشل الحفظ'); }
   };
 
@@ -181,28 +201,6 @@ export default function SchoolScreen({ route, navigation }) {
       { text: "إلغاء", style: "cancel" },
       { text: "خروج", onPress: async () => { await clearUserSession(); navigation.replace('Login'); } }
     ]);
-  };
-
-  const handleExport = (format) => {
-    const dataToExport = {
-      drivers, staff, parents, students, emergencies, reports
-    }[activeTab] || drivers;
-    
-    const typeLabel = {
-      drivers: 'السائقين',
-      staff: 'المرافقات',
-      parents: 'أولياء الأمور',
-      students: 'الطلاب',
-      emergencies: 'الطوارئ',
-      reports: 'التقارير'
-    }[activeTab] || 'بيانات عامة';
-
-    if (format === 'excel') {
-      exportToExcel(dataToExport, typeLabel, dynamicSchoolName, user.name);
-    } else {
-      exportToPDF(dataToExport, typeLabel, dynamicSchoolName, user.name);
-    }
-    setShowExportModal(false);
   };
 
   const stats = useMemo(() => ({
@@ -233,118 +231,119 @@ export default function SchoolScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      {/* Header - Right Aligned Logo and Name */}
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleLogout} style={styles.headerIcon}>
-          <MaterialCommunityIcons name="logout" size={24} color="#EF4444" />
+        <TouchableOpacity onPress={handleLogout}>
+          <MaterialCommunityIcons name="logout" size={22} color="#EF4444" />
         </TouchableOpacity>
 
-        <View style={styles.headerRight}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.schoolNameText}>{dynamicSchoolName || 'مدرستي'}</Text>
-            <Text style={styles.headerRoleText}>مدير المدرسة</Text>
-          </View>
-          {schoolLogo ? (
-            <Image source={{ uri: schoolLogo }} style={styles.headerLogo} />
-          ) : (
-            <View style={styles.headerLogoPlaceholder}>
-              <MaterialCommunityIcons name="school" size={24} color="#3B82F6" />
-            </View>
-          )}
+        <View style={styles.headerContent}>
+          <Text style={styles.schoolName}>{dynamicSchoolName || 'مدرستي'}</Text>
+          <Text style={styles.schoolRole}>لوحة التحكم</Text>
         </View>
+
+        {schoolLogo ? (
+          <Image source={{ uri: schoolLogo }} style={styles.schoolLogo} />
+        ) : (
+          <View style={styles.schoolLogoBg}>
+            <MaterialCommunityIcons name="school" size={20} color="#3B82F6" />
+          </View>
+        )}
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {activeTab === 'dashboard' ? (
-          <View style={styles.dashboard}>
-            {/* Compact Stats Grid */}
-            <View style={styles.compactStatsGrid}>
-              <View style={[styles.compactStatCard, { borderRightColor: '#3B82F6' }]}>
-                <MaterialCommunityIcons name="bus" size={20} color="#3B82F6" />
-                <Text style={styles.compactStatNum}>{stats.buses}</Text>
-                <Text style={styles.compactStatLab}>حافلة</Text>
+          <View style={styles.dashboardContent}>
+            {/* Stats Section */}
+            <View style={styles.statsSection}>
+              <Text style={styles.sectionTitle}>الإحصائيات</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.buses}</Text>
+                  <Text style={styles.statLabel}>حافلة</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.students}</Text>
+                  <Text style={styles.statLabel}>طالب</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.staff}</Text>
+                  <Text style={styles.statLabel}>مرافقة</Text>
+                </View>
               </View>
-              <View style={[styles.compactStatCard, { borderRightColor: '#10B981' }]}>
-                <MaterialCommunityIcons name="account-group" size={20} color="#10B981" />
-                <Text style={styles.compactStatNum}>{stats.students}</Text>
-                <Text style={styles.compactStatLab}>طالب</Text>
-              </View>
-              <View style={[styles.compactStatCard, { borderRightColor: '#F59E0B' }]}>
-                <MaterialCommunityIcons name="human-female" size={20} color="#F59E0B" />
-                <Text style={styles.compactStatNum}>{stats.staff}</Text>
-                <Text style={styles.compactStatLab}>مرافقة</Text>
-              </View>
-              <View style={[styles.compactStatCard, { borderRightColor: '#EF4444' }]}>
-                <MaterialCommunityIcons name="alert-decagram" size={20} color="#EF4444" />
-                <Text style={styles.compactStatNum}>{stats.emergencies}</Text>
-                <Text style={styles.compactStatLab}>طوارئ</Text>
-              </View>
-              <View style={[styles.compactStatCard, { borderRightColor: '#8B5CF6' }]}>
-                <MaterialCommunityIcons name="map-marker-radius" size={20} color="#8B5CF6" />
-                <Text style={styles.compactStatNum}>{stats.activeTrips}</Text>
-                <Text style={styles.compactStatLab}>نشط</Text>
-              </View>
-              <View style={[styles.compactStatCard, { borderRightColor: '#64748B' }]}>
-                <MaterialCommunityIcons name="account-tie" size={20} color="#64748B" />
-                <Text style={styles.compactStatNum}>{stats.parents}</Text>
-                <Text style={styles.compactStatLab}>ولي أمر</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.activeTrips}</Text>
+                  <Text style={styles.statLabel}>رحلة نشطة</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.emergencies}</Text>
+                  <Text style={styles.statLabel}>طوارئ</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.parents}</Text>
+                  <Text style={styles.statLabel}>ولي أمر</Text>
+                </View>
               </View>
             </View>
 
-            {/* Actions Row */}
-            <View style={styles.quickActionsRow}>
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => { setActiveTab('drivers'); setShowForm(true); }}>
-                <MaterialCommunityIcons name="plus-box" size={24} color="#3B82F6" />
-                <Text style={styles.quickActionText}>سائق</Text>
+            {/* Quick Actions */}
+            <View style={styles.actionsSection}>
+              <Text style={styles.sectionTitle}>الإجراءات</Text>
+              <TouchableOpacity style={styles.actionItem} onPress={() => { setActiveTab('drivers'); setShowForm(true); }}>
+                <MaterialCommunityIcons name="plus-circle" size={24} color="#3B82F6" />
+                <Text style={styles.actionText}>إضافة سائق</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => { setActiveTab('students'); setShowForm(true); }}>
-                <MaterialCommunityIcons name="account-plus" size={24} color="#10B981" />
-                <Text style={styles.quickActionText}>طالب</Text>
+              <TouchableOpacity style={styles.actionItem} onPress={() => { setActiveTab('students'); setShowForm(true); }}>
+                <MaterialCommunityIcons name="plus-circle" size={24} color="#10B981" />
+                <Text style={styles.actionText}>إضافة طالب</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => setShowBroadcastModal(true)}>
+              <TouchableOpacity style={styles.actionItem} onPress={() => setShowBroadcastModal(true)}>
                 <MaterialCommunityIcons name="bullhorn" size={24} color="#F59E0B" />
-                <Text style={styles.quickActionText}>إعلان</Text>
+                <Text style={styles.actionText}>إرسال إعلان</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => setShowExportModal(true)}>
-                <MaterialCommunityIcons name="download" size={24} color="#8B5CF6" />
-                <Text style={styles.quickActionText}>تصدير</Text>
+              <TouchableOpacity style={styles.actionItem} onPress={() => setShowExportModal(true)}>
+                <MaterialCommunityIcons name="download-box" size={24} color="#8B5CF6" />
+                <Text style={styles.actionText}>تصدير البيانات</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Social & Subscription Row */}
-            <View style={styles.infoRow}>
-              <TouchableOpacity style={styles.infoBox} onPress={() => setShowSocialModal(true)}>
-                <View style={styles.infoBoxHeader}>
+            {/* Info Cards */}
+            <View style={styles.infoSection}>
+              <TouchableOpacity style={styles.infoCard} onPress={() => setShowSocialModal(true)}>
+                <View style={styles.infoCardHeader}>
                   <MaterialCommunityIcons name="share-variant" size={20} color="#8B5CF6" />
-                  <Text style={styles.infoBoxTitle}>التواصل</Text>
+                  <Text style={styles.infoCardTitle}>التواصل الاجتماعي</Text>
                 </View>
-                <View style={styles.socialIconsSmall}>
-                  <MaterialCommunityIcons name="facebook" size={18} color={socialLinks.facebook ? "#1877F2" : "#CBD5E1"} />
-                  <MaterialCommunityIcons name="instagram" size={18} color={socialLinks.instagram ? "#E4405F" : "#CBD5E1"} />
+                <View style={styles.socialIcons}>
+                  <MaterialCommunityIcons name="facebook" size={16} color={socialLinks.facebook ? "#1877F2" : "#CBD5E1"} />
+                  <MaterialCommunityIcons name="instagram" size={16} color={socialLinks.instagram ? "#E4405F" : "#CBD5E1"} />
                 </View>
               </TouchableOpacity>
 
-              <View style={[styles.infoBox, { borderRightColor: isExpired ? '#EF4444' : '#3B82F6' }]}>
-                <View style={styles.infoBoxHeader}>
-                  <MaterialCommunityIcons name="shield-check" size={20} color={isExpired ? '#EF4444' : '#3B82F6'} />
-                  <Text style={styles.infoBoxTitle}>الاشتراك</Text>
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <MaterialCommunityIcons name="calendar-check" size={20} color={isExpired ? '#EF4444' : '#3B82F6'} />
+                  <Text style={styles.infoCardTitle}>الاشتراك</Text>
                 </View>
-                <Text style={styles.infoBoxSub}>{new Date(expiryDate).toLocaleDateString('ar-EG')}</Text>
+                <Text style={[styles.infoCardValue, isExpired && { color: '#EF4444' }]}>
+                  {new Date(expiryDate).toLocaleDateString('ar-EG')}
+                </Text>
               </View>
             </View>
           </View>
         ) : (
-          <View style={styles.listContainer}>
-            <View style={styles.listHeader}>
-              <TouchableOpacity style={styles.listAddBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
+          <View style={styles.listContent}>
+            <View style={styles.listTopBar}>
+              <TouchableOpacity style={styles.addBtn} onPress={() => { setFormData({}); setEditingId(null); setShowForm(true); }}>
                 <MaterialCommunityIcons name="plus" size={20} color="#FFF" />
               </TouchableOpacity>
-              <View style={styles.listSearchContainer}>
-                <MaterialCommunityIcons name="magnify" size={20} color="#94A3B8" />
+              <View style={styles.searchBox}>
+                <MaterialCommunityIcons name="magnify" size={18} color="#94A3B8" />
                 <TextInput
-                  style={styles.listSearchInput}
+                  style={styles.searchInput}
                   placeholder="بحث..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -363,97 +362,114 @@ export default function SchoolScreen({ route, navigation }) {
                 />
               )}
               scrollEnabled={false}
-              ListEmptyComponent={<Text style={styles.emptyText}>لا توجد بيانات</Text>}
+              ListEmptyComponent={<Text style={styles.emptyMessage}>لا توجد بيانات</Text>}
             />
           </View>
         )}
       </ScrollView>
 
-      {/* Bottom Tabs */}
-      <View style={styles.bottomTabs}>
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
         {TABS.map(tab => (
-          <TouchableOpacity key={tab.id} style={styles.tabItem} onPress={() => setActiveTab(tab.id)}>
-            <MaterialCommunityIcons name={tab.icon} size={22} color={activeTab === tab.id ? '#3B82F6' : '#94A3B8'} />
-            <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
+          <TouchableOpacity key={tab.id} style={styles.navTab} onPress={() => setActiveTab(tab.id)}>
+            <MaterialCommunityIcons name={tab.icon} size={20} color={activeTab === tab.id ? '#3B82F6' : '#CBD5E1'} />
+            <Text style={[styles.navLabel, activeTab === tab.id && styles.navLabelActive]}>{tab.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Modals */}
+      {/* Form Modal */}
       <Modal visible={showForm} animationType="slide">
-        <SafeAreaView style={styles.modalFull}>
-          <View style={styles.modalHeaderFixed}>
-            <TouchableOpacity onPress={() => setShowForm(false)}><MaterialCommunityIcons name="close" size={24} /></TouchableOpacity>
-            <Text style={styles.modalTitleText}>{editingId ? 'تعديل' : 'إضافة'}</Text>
-            <TouchableOpacity onPress={() => handleAction('save')}><Text style={styles.modalSaveText}>حفظ</Text></TouchableOpacity>
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowForm(false)}>
+              <MaterialCommunityIcons name="close" size={24} color="#1E293B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{editingId ? 'تعديل' : 'إضافة'}</Text>
+            <TouchableOpacity onPress={() => handleAction('save')}>
+              <Text style={styles.modalSave}>حفظ</Text>
+            </TouchableOpacity>
           </View>
-          <ScrollView style={styles.modalFormContent}>
-            <View style={styles.formInputGroup}>
+          <ScrollView style={styles.modalBody}>
+            <View style={styles.formGroup}>
               <Text style={styles.formLabel}>الاسم الكامل</Text>
-              <TextInput style={styles.formInput} value={formData.name} onChangeText={t => setFormData({...formData, name: t})} placeholder="أدخل الاسم..." />
+              <TextInput style={styles.formField} value={formData.name} onChangeText={t => setFormData({...formData, name: t})} />
             </View>
-            <View style={styles.formInputGroup}>
+            <View style={styles.formGroup}>
               <Text style={styles.formLabel}>اسم المستخدم</Text>
-              <TextInput style={styles.formInput} value={formData.username} onChangeText={t => setFormData({...formData, username: t})} editable={!editingId} placeholder="اسم الدخول..." />
+              <TextInput style={styles.formField} value={formData.username} onChangeText={t => setFormData({...formData, username: t})} editable={!editingId} />
             </View>
             {['drivers', 'staff', 'parents'].includes(activeTab) && (
-              <View style={styles.formInputGroup}>
+              <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>رقم الجوال</Text>
-                <TextInput style={styles.formInput} value={formData.phone} onChangeText={t => setFormData({...formData, phone: t})} keyboardType="phone-pad" placeholder="05xxxxxxxx" />
+                <TextInput style={styles.formField} value={formData.phone} onChangeText={t => setFormData({...formData, phone: t})} keyboardType="phone-pad" />
               </View>
             )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
+      {/* Export Modal */}
       <Modal visible={showExportModal} transparent animationType="fade">
         <View style={styles.overlay}>
           <View style={styles.bottomSheet}>
             <Text style={styles.sheetTitle}>تصدير البيانات</Text>
-            <TouchableOpacity style={styles.sheetBtn} onPress={() => handleExport('excel')}>
+            <TouchableOpacity style={styles.sheetOption} onPress={() => handleExport('excel')}>
               <MaterialCommunityIcons name="file-excel-box" size={24} color="#10B981" />
-              <Text style={styles.sheetBtnText}>تصدير ملف Excel</Text>
+              <Text style={styles.sheetOptionText}>Excel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.sheetBtn} onPress={() => handleExport('pdf')}>
+            <TouchableOpacity style={styles.sheetOption} onPress={() => handleExport('pdf')}>
               <MaterialCommunityIcons name="file-pdf-box" size={24} color="#EF4444" />
-              <Text style={styles.sheetBtnText}>تصدير ملف PDF</Text>
+              <Text style={styles.sheetOptionText}>PDF</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.sheetCancel} onPress={() => setShowExportModal(false)}>
-              <Text style={styles.sheetCancelText}>إلغاء</Text>
+            <TouchableOpacity style={styles.sheetClose} onPress={() => setShowExportModal(false)}>
+              <Text style={styles.sheetCloseText}>إغلاق</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
+      {/* Social Links Modal */}
       <Modal visible={showSocialModal} transparent animationType="slide">
         <View style={styles.overlay}>
-          <View style={styles.centerModal}>
-            <Text style={styles.modalTitleText}>روابط التواصل</Text>
-            <TextInput style={styles.formInput} placeholder="رابط Facebook" value={socialLinks.facebook} onChangeText={t => setSocialLinks({...socialLinks, facebook: t})} />
-            <TextInput style={[styles.formInput, { marginTop: 12 }]} placeholder="رابط Instagram" value={socialLinks.instagram} onChangeText={t => setSocialLinks({...socialLinks, instagram: t})} />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalActionBtn} onPress={() => setShowSocialModal(false)}><Text>إلغاء</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: '#3B82F6' }]} onPress={handleSaveSocialLinks}><Text style={{ color: '#FFF' }}>حفظ</Text></TouchableOpacity>
+          <View style={styles.centerSheet}>
+            <Text style={styles.sheetTitle}>روابط التواصل</Text>
+            <TextInput style={styles.formField} placeholder="Facebook" value={socialLinks.facebook} onChangeText={t => setSocialLinks({...socialLinks, facebook: t})} />
+            <TextInput style={[styles.formField, { marginTop: 12 }]} placeholder="Instagram" value={socialLinks.instagram} onChangeText={t => setSocialLinks({...socialLinks, instagram: t})} />
+            <View style={styles.sheetActions}>
+              <TouchableOpacity style={styles.sheetActionBtn} onPress={() => setShowSocialModal(false)}>
+                <Text>إلغاء</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.sheetActionBtn, { backgroundColor: '#3B82F6' }]} onPress={handleSaveSocialLinks}>
+                <Text style={{ color: '#FFF' }}>حفظ</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
+      {/* Broadcast Modal */}
       <Modal visible={showBroadcastModal} transparent animationType="slide">
         <View style={styles.overlay}>
-          <View style={styles.centerModal}>
-            <Text style={styles.modalTitleText}>إرسال إعلان</Text>
-            <View style={styles.targetRow}>
+          <View style={styles.centerSheet}>
+            <Text style={styles.sheetTitle}>إرسال إعلان</Text>
+            <View style={styles.targetButtons}>
               {['all', 'drivers', 'parents'].map(t => (
-                <TouchableOpacity key={t} style={[styles.targetChip, broadcastTarget === t && styles.targetChipActive]} onPress={() => setBroadcastTarget(t)}>
-                  <Text style={[styles.targetChipText, broadcastTarget === t && { color: '#FFF' }]}>{t === 'all' ? 'الكل' : t === 'drivers' ? 'سائقين' : 'أهالي'}</Text>
+                <TouchableOpacity key={t} style={[styles.targetBtn, broadcastTarget === t && styles.targetBtnActive]} onPress={() => setBroadcastTarget(t)}>
+                  <Text style={[styles.targetBtnText, broadcastTarget === t && { color: '#FFF' }]}>
+                    {t === 'all' ? 'الكل' : t === 'drivers' ? 'سائقين' : 'أهالي'}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <TextInput style={styles.broadcastInput} multiline placeholder="نص الإعلان..." value={broadcastContent} onChangeText={setBroadcastContent} />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalActionBtn} onPress={() => setShowBroadcastModal(false)}><Text>إلغاء</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.modalActionBtn, { backgroundColor: '#F59E0B' }]} onPress={handleSendBroadcast}><Text style={{ color: '#FFF' }}>إرسال</Text></TouchableOpacity>
+            <TextInput style={[styles.formField, { height: 100, textAlignVertical: 'top' }]} multiline placeholder="النص..." value={broadcastContent} onChangeText={setBroadcastContent} />
+            <View style={styles.sheetActions}>
+              <TouchableOpacity style={styles.sheetActionBtn} onPress={() => setShowBroadcastModal(false)}>
+                <Text>إلغاء</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.sheetActionBtn, { backgroundColor: '#F59E0B' }]} onPress={handleSendBroadcast}>
+                <Text style={{ color: '#FFF' }}>إرسال</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -463,80 +479,76 @@ export default function SchoolScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F1F5F9' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
-  // Header - Right Aligned
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerTextContainer: { alignItems: 'flex-end' },
-  schoolNameText: { fontSize: 16, fontWeight: '800', color: '#1E293B' },
-  headerRoleText: { fontSize: 11, color: '#64748B' },
-  headerLogo: { width: 44, height: 44, borderRadius: 22 },
-  headerLogoPlaceholder: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#DBEAFE' },
-  headerIcon: { padding: 4 },
 
-  content: { flex: 1 },
-  dashboard: { padding: 12 },
-  
-  // Compact Stats
-  compactStatsGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' },
-  compactStatCard: { width: (width - 40) / 3, backgroundColor: '#FFF', padding: 10, borderRadius: 12, alignItems: 'center', borderRightWidth: 3, elevation: 2 },
-  compactStatNum: { fontSize: 16, fontWeight: '800', color: '#1E293B', marginVertical: 2 },
-  compactStatLab: { fontSize: 10, color: '#64748B', fontWeight: '600' },
+  // Header
+  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  headerContent: { flex: 1, alignItems: 'flex-end', marginHorizontal: 12 },
+  schoolName: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  schoolRole: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  schoolLogo: { width: 40, height: 40, borderRadius: 20 },
+  schoolLogoBg: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
 
-  // Quick Actions
-  quickActionsRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 16, gap: 8 },
-  quickActionBtn: { flex: 1, backgroundColor: '#FFF', paddingVertical: 12, borderRadius: 12, alignItems: 'center', elevation: 2 },
-  quickActionText: { fontSize: 11, fontWeight: '700', color: '#1E293B', marginTop: 4 },
+  scrollView: { flex: 1 },
 
-  // Info Row
-  infoRow: { flexDirection: 'row-reverse', gap: 8, marginTop: 12 },
-  infoBox: { flex: 1, backgroundColor: '#FFF', padding: 12, borderRadius: 12, elevation: 2, borderRightWidth: 3, borderRightColor: '#8B5CF6' },
-  infoBoxHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 4 },
-  infoBoxTitle: { fontSize: 12, fontWeight: '700', color: '#1E293B' },
-  socialIconsSmall: { flexDirection: 'row-reverse', gap: 8 },
-  infoBoxSub: { fontSize: 11, color: '#64748B', textAlign: 'right' },
+  // Dashboard
+  dashboardContent: { padding: 16 },
+  statsSection: { marginBottom: 24 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B', marginBottom: 12, textAlign: 'right' },
+  statsRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 12, gap: 12 },
+  statItem: { flex: 1, backgroundColor: '#FFFFFF', paddingVertical: 16, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  statValue: { fontSize: 20, fontWeight: '800', color: '#3B82F6', marginBottom: 4 },
+  statLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
 
-  // List View
-  listContainer: { padding: 12 },
-  listHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  listSearchContainer: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 10, paddingHorizontal: 10, elevation: 1 },
-  listSearchInput: { flex: 1, paddingVertical: 8, textAlign: 'right', fontSize: 13 },
-  listAddBtn: { backgroundColor: '#3B82F6', width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { textAlign: 'center', color: '#94A3B8', marginTop: 40 },
+  actionsSection: { marginBottom: 24 },
+  actionItem: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 14, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  actionText: { fontSize: 13, fontWeight: '600', color: '#1E293B', marginRight: 12 },
 
-  // Bottom Tabs
-  bottomTabs: { flexDirection: 'row-reverse', backgroundColor: '#FFF', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
-  tabItem: { flex: 1, alignItems: 'center' },
-  tabText: { fontSize: 9, color: '#94A3B8', marginTop: 2 },
-  tabTextActive: { color: '#3B82F6', fontWeight: '700' },
+  infoSection: { gap: 12 },
+  infoCard: { backgroundColor: '#FFFFFF', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  infoCardHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 8 },
+  infoCardTitle: { fontSize: 13, fontWeight: '600', color: '#1E293B', marginRight: 8 },
+  socialIcons: { flexDirection: 'row-reverse', gap: 12 },
+  infoCardValue: { fontSize: 12, color: '#64748B', textAlign: 'right' },
+
+  // List
+  listContent: { padding: 16 },
+  listTopBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 16 },
+  searchBox: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  searchInput: { flex: 1, paddingVertical: 10, textAlign: 'right', fontSize: 13 },
+  addBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' },
+  emptyMessage: { textAlign: 'center', color: '#94A3B8', marginTop: 40 },
+
+  // Bottom Nav
+  bottomNav: { flexDirection: 'row-reverse', backgroundColor: '#FFFFFF', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  navTab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
+  navLabel: { fontSize: 10, color: '#94A3B8', marginTop: 4 },
+  navLabelActive: { color: '#3B82F6', fontWeight: '700' },
 
   // Modals
-  modalFull: { flex: 1, backgroundColor: '#F8FAFC' },
-  modalHeaderFixed: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  modalTitleText: { fontSize: 16, fontWeight: '700' },
-  modalSaveText: { color: '#3B82F6', fontWeight: '800' },
-  modalFormContent: { padding: 16 },
-  formInputGroup: { marginBottom: 16 },
-  formLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6, textAlign: 'right' },
-  formInput: { backgroundColor: '#FFF', borderRadius: 10, padding: 12, textAlign: 'right', borderWidth: 1, borderColor: '#E2E8F0' },
+  modal: { flex: 1, backgroundColor: '#F8FAFC' },
+  modalHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  modalSave: { color: '#3B82F6', fontWeight: '700', fontSize: 14 },
+  modalBody: { padding: 16 },
+  formGroup: { marginBottom: 16 },
+  formLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 8, textAlign: 'right' },
+  formField: { backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', textAlign: 'right', fontSize: 13 },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  centerModal: { width: '85%', backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
-  modalActions: { flexDirection: 'row-reverse', gap: 10, marginTop: 20 },
-  modalActionBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#F1F5F9' },
-  
-  bottomSheet: { width: '100%', backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, position: 'absolute', bottom: 0 },
-  sheetTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
-  sheetBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  sheetBtnText: { fontSize: 14, fontWeight: '600' },
-  sheetCancel: { marginTop: 10, paddingVertical: 14, alignItems: 'center' },
-  sheetCancelText: { color: '#EF4444', fontWeight: '700' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
+  bottomSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 16, paddingVertical: 20 },
+  centerSheet: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, marginHorizontal: 16 },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 16, textAlign: 'center' },
+  sheetOption: { flexDirection: 'row-reverse', alignItems: 'center', paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  sheetOptionText: { fontSize: 14, fontWeight: '600', color: '#1E293B' },
+  sheetClose: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
+  sheetCloseText: { color: '#EF4444', fontWeight: '700', fontSize: 14 },
+  sheetActions: { flexDirection: 'row-reverse', gap: 10, marginTop: 16 },
+  sheetActionBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#F1F5F9' },
 
-  targetRow: { flexDirection: 'row-reverse', gap: 8, marginVertical: 12 },
-  targetChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15, backgroundColor: '#F1F5F9' },
-  targetChipActive: { backgroundColor: '#F59E0B' },
-  targetChipText: { fontSize: 11, color: '#64748B' },
-  broadcastInput: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, textAlign: 'right', height: 100, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E2E8F0' }
+  targetButtons: { flexDirection: 'row-reverse', gap: 8, marginBottom: 16 },
+  targetBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center' },
+  targetBtnActive: { backgroundColor: '#F59E0B' },
+  targetBtnText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
 });
