@@ -227,6 +227,7 @@ export default function SchoolScreen({ route, navigation }) {
     { id: 'trips', label: 'الرحلات', icon: 'map-marker-radius' },
     { id: 'communication', label: 'التواصل', icon: 'message-text' },
     { id: 'emergencies', label: 'الطوارئ', icon: 'alert-circle' },
+    { id: 'subManagers', label: 'المدراء', icon: 'account-tie' },
   ].filter(tab => tab.id === 'dashboard' || tab.id === 'communication' || tab.id === 'trips' || canViewTab(tab.id));
 
   return (
@@ -308,7 +309,20 @@ export default function SchoolScreen({ route, navigation }) {
                 <MaterialCommunityIcons name="download-box" size={24} color="#8B5CF6" />
                 <Text style={styles.actionText}>تصدير البيانات</Text>
               </TouchableOpacity>
-            </View>
+              <TouchableOpacity
+               style={styles.actionItem}
+                 onPress={() => navigation.navigate('SubManagersScreen')}
+              >
+                <MaterialCommunityIcons
+                  name="account-tie"
+                  size={24}
+                   color="#06B6D4"
+                  />
+                  <Text style={styles.actionText}>
+                   اختبار شاشة المدراء الفرعيين
+                   </Text>
+                      </TouchableOpacity>
+                    </View>
 
             {/* Info Cards */}
             <View style={styles.infoSection}>
@@ -371,7 +385,13 @@ export default function SchoolScreen({ route, navigation }) {
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         {TABS.map(tab => (
-          <TouchableOpacity key={tab.id} style={styles.navTab} onPress={() => setActiveTab(tab.id)}>
+          <TouchableOpacity key={tab.id} style={styles.navTab} onPress={() => {
+  if (tab.id === 'subManagers') {
+    navigation.navigate('SubManagersScreen');
+  } else {
+    setActiveTab(tab.id);
+  }
+}}>
             <MaterialCommunityIcons name={tab.icon} size={20} color={activeTab === tab.id ? '#3B82F6' : '#CBD5E1'} />
             <Text style={[styles.navLabel, activeTab === tab.id && styles.navLabelActive]}>{tab.label}</Text>
           </TouchableOpacity>

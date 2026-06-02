@@ -12,6 +12,7 @@ import ParentScreen from './src/modules/parent/screens/ParentScreen';
 import ActiveTripsScreen from './src/modules/school/screens/ActiveTripsScreen';
 import TripMapScreen from './src/modules/school/screens/TripMapScreen';
 import SetSchoolLocationScreen from './src/modules/school/screens/SetSchoolLocationScreen';
+import SubManagersScreen from './src/modules/school/screens/SubManagersScreen';
 
 const Stack = createStackNavigator();
 
@@ -33,6 +34,10 @@ export default function App() {
         <Stack.Screen name="ActiveTrips" component={ActiveTripsScreen} />
         <Stack.Screen name="TripMap" component={TripMapScreen} />
         <Stack.Screen name="SetSchoolLocation" component={SetSchoolLocationScreen} />
+        <Stack.Screen
+  name="SubManagersScreen"
+  component={SubManagersScreen}
+/>
       </Stack.Navigator>
     </NavigationContainer>
   );
